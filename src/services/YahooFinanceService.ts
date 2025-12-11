@@ -106,94 +106,116 @@ async function yahooRequest(endpoint: string, params: Record<string, string>): P
 }
 
 export async function getStockQuote(ticker: string): Promise<StockQuote> {
+  // Use v8 chart endpoint (v6/v7 quote endpoints are deprecated)
   try {
-    const url = `https://${YAHOO_QUERY_HOST}/v6/finance/quote?symbols=${ticker.toUpperCase()}`
+    const url = `https://${YAHOO_QUERY_HOST}/v8/finance/chart/${ticker.toUpperCase()}?interval=1d&range=5d`
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     })
     
-    if (!response.ok) throw new Error(`Yahoo quote error: ${response.status}`)
+    if (!response.ok) throw new Error(`Yahoo chart error: ${response.status}`)
     
     const data = await response.json() as {
-      quoteResponse?: {
+      chart?: {
         result?: {
-          symbol?: string
-          regularMarketPrice?: number
-          regularMarketChange?: number
-          regularMarketChangePercent?: number
-          marketCap?: number
-          regularMarketVolume?: number
-          averageDailyVolume3Month?: number
-          fiftyTwoWeekHigh?: number
-          fiftyTwoWeekLow?: number
-          fiftyDayAverage?: number
-          twoHundredDayAverage?: number
-          marketState?: string
-          preMarketPrice?: number
-          preMarketChange?: number
-          preMarketChangePercent?: number
-          postMarketPrice?: number
-          postMarketChange?: number
-          postMarketChangePercent?: number
+          meta?: {
+            symbol?: string
+            regularMarketPrice?: number
+            previousClose?: number
+            fiftyTwoWeekHigh?: number
+            fiftyTwoWeekLow?: number
+            regularMarketVolume?: number
+            chartPreviousClose?: number
+          }
+          indicators?: {
+            quote?: { volume?: number[]; close?: number[] }[]
+          }
         }[]
       }
     }
 
-    const quote = data.quoteResponse?.result?.[0]
-    if (!quote) throw new Error(`No quote data for ${ticker}`)
+    const result = data.chart?.result?.[0]
+    const meta = result?.meta
+    if (!meta || !meta.regularMarketPrice) throw new Error(`No chart data for ${ticker}`)
 
-    const marketState = (quote.marketState || 'CLOSED') as StockQuote['marketState']
+    const previousClose = meta.previousClose || meta.chartPreviousClose || meta.regularMarketPrice
+    const priceChange = meta.regularMarketPrice - previousClose
+    const changePercent = previousClose > 0 ? (priceChange / previousClose) * 100 : 0
 
-    return {
-      symbol: quote.symbol || ticker.toUpperCase(),
-      price: quote.regularMarketPrice || 0,
-      change: quote.regularMarketChange || 0,
-      changePercent: quote.regularMarketChangePercent || 0,
-      marketCap: quote.marketCap || 0,
-      volume: quote.regularMarketVolume || 0,
-      avgVolume: quote.averageDailyVolume3Month || 0,
-      fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh || 0,
-      fiftyTwoWeekLow: quote.fiftyTwoWeekLow || 0,
-      fiftyDayAvg: quote.fiftyDayAverage || 0,
-      twoHundredDayAvg: quote.twoHundredDayAverage || 0,
-      marketState,
-      preMarketPrice: quote.preMarketPrice ?? null,
-      preMarketChange: quote.preMarketChange ?? null,
-      preMarketChangePercent: quote.preMarketChangePercent ?? null,
-      postMarketPrice: quote.postMarketPrice ?? null,
-      postMarketChange: quote.postMarketChange ?? null,
-      postMarketChangePercent: quote.postMarketChangePercent ?? null
+    // Extract volume from indicators
+    const volumes = result?.indicators?.quote?.[0]?.volume || []
+    const recentVolume = volumes.filter(v => v != null).slice(-1)[0] || 0
+    const avgVolume = volumes.filter(v => v != null).reduce((a, b) => a + b, 0) / Math.max(volumes.filter(v => v != null).length, 1)
+
+    // Determine market state based on current time
+    const now = new Date()
+    const nyHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours()
+    const nyDay = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay()
+    const isWeekend = nyDay === 0 || nyDay === 6
+    
+    let marketState: StockQuote['marketState'] = 'CLOSED'
+    if (!isWeekend) {
+      if (nyHour >= 4 && nyHour < 9.5) marketState = 'PRE'
+      else if (nyHour >= 9.5 && nyHour < 16) marketState = 'REGULAR'
+      else if (nyHour >= 16 && nyHour < 20) marketState = 'POST'
     }
-  } catch {
-    const data = await yahooRequest('/market/v2/get-quotes', {
-      region: 'US',
-      symbols: ticker.toUpperCase()
-    }) as { quoteResponse?: { result?: Record<string, unknown>[] } }
-
-    const quote = data.quoteResponse?.result?.[0]
-    if (!quote) throw new Error(`No quote data for ${ticker}`)
-
-    const marketState = (String(quote.marketState || 'CLOSED')) as StockQuote['marketState']
 
     return {
-      symbol: String(quote.symbol || ticker),
-      price: Number(quote.regularMarketPrice) || 0,
-      change: Number(quote.regularMarketChange) || 0,
-      changePercent: Number(quote.regularMarketChangePercent) || 0,
-      marketCap: Number(quote.marketCap) || 0,
-      volume: Number(quote.regularMarketVolume) || 0,
-      avgVolume: Number(quote.averageDailyVolume3Month) || 0,
-      fiftyTwoWeekHigh: Number(quote.fiftyTwoWeekHigh) || 0,
-      fiftyTwoWeekLow: Number(quote.fiftyTwoWeekLow) || 0,
-      fiftyDayAvg: Number(quote.fiftyDayAverage) || 0,
-      twoHundredDayAvg: Number(quote.twoHundredDayAverage) || 0,
+      symbol: meta.symbol || ticker.toUpperCase(),
+      price: meta.regularMarketPrice,
+      change: priceChange,
+      changePercent,
+      marketCap: 0, // Not available from chart endpoint
+      volume: recentVolume,
+      avgVolume,
+      fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || 0,
+      fiftyTwoWeekLow: meta.fiftyTwoWeekLow || 0,
+      fiftyDayAvg: 0, // Calculate from history if needed
+      twoHundredDayAvg: 0,
       marketState,
-      preMarketPrice: quote.preMarketPrice ? Number(quote.preMarketPrice) : null,
-      preMarketChange: quote.preMarketChange ? Number(quote.preMarketChange) : null,
-      preMarketChangePercent: quote.preMarketChangePercent ? Number(quote.preMarketChangePercent) : null,
-      postMarketPrice: quote.postMarketPrice ? Number(quote.postMarketPrice) : null,
-      postMarketChange: quote.postMarketChange ? Number(quote.postMarketChange) : null,
-      postMarketChangePercent: quote.postMarketChangePercent ? Number(quote.postMarketChangePercent) : null
+      preMarketPrice: null,
+      preMarketChange: null,
+      preMarketChangePercent: null,
+      postMarketPrice: null,
+      postMarketChange: null,
+      postMarketChangePercent: null
+    }
+  } catch (chartError) {
+    // Fallback to RapidAPI if chart endpoint fails
+    try {
+      const data = await yahooRequest('/market/v2/get-quotes', {
+        region: 'US',
+        symbols: ticker.toUpperCase()
+      }) as { quoteResponse?: { result?: Record<string, unknown>[] } }
+
+      const quote = data.quoteResponse?.result?.[0]
+      if (!quote) throw new Error(`No quote data for ${ticker}`)
+
+      const marketState = (String(quote.marketState || 'CLOSED')) as StockQuote['marketState']
+
+      return {
+        symbol: String(quote.symbol || ticker),
+        price: Number(quote.regularMarketPrice) || 0,
+        change: Number(quote.regularMarketChange) || 0,
+        changePercent: Number(quote.regularMarketChangePercent) || 0,
+        marketCap: Number(quote.marketCap) || 0,
+        volume: Number(quote.regularMarketVolume) || 0,
+        avgVolume: Number(quote.averageDailyVolume3Month) || 0,
+        fiftyTwoWeekHigh: Number(quote.fiftyTwoWeekHigh) || 0,
+        fiftyTwoWeekLow: Number(quote.fiftyTwoWeekLow) || 0,
+        fiftyDayAvg: Number(quote.fiftyDayAverage) || 0,
+        twoHundredDayAvg: Number(quote.twoHundredDayAverage) || 0,
+        marketState,
+        preMarketPrice: quote.preMarketPrice ? Number(quote.preMarketPrice) : null,
+        preMarketChange: quote.preMarketChange ? Number(quote.preMarketChange) : null,
+        preMarketChangePercent: quote.preMarketChangePercent ? Number(quote.preMarketChangePercent) : null,
+        postMarketPrice: quote.postMarketPrice ? Number(quote.postMarketPrice) : null,
+        postMarketChange: quote.postMarketChange ? Number(quote.postMarketChange) : null,
+        postMarketChangePercent: quote.postMarketChangePercent ? Number(quote.postMarketChangePercent) : null
+      }
+    } catch (rapidApiError) {
+      console.error(`Failed to fetch quote for ${ticker}:`, chartError, rapidApiError)
+      throw new Error(`Could not fetch price for ${ticker}`)
     }
   }
 }
