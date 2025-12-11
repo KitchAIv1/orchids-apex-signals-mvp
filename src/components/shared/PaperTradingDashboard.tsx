@@ -195,36 +195,47 @@ export function PaperTradingDashboard() {
       )}
 
       {portfolio && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-          <PortfolioStatCard
-            label="Total Value"
-            value={formatCurrency(portfolio.total_value)}
-            icon={Wallet}
-            change={portfolio.total_return_pct || 0}
-          />
-          <PortfolioStatCard
-            label="Positions Value"
-            value={formatCurrency(positionsSummary.totalValue)}
-            icon={Briefcase}
-            subtext={`${positions.length} position${positions.length !== 1 ? 's' : ''}`}
-          />
-          <PortfolioStatCard
-            label="Cash Balance"
-            value={formatCurrency(portfolio.cash_balance)}
-            icon={DollarSign}
-          />
-          <PortfolioStatCard
-            label="Win Rate"
-            value={`${(portfolio.win_rate || 0).toFixed(1)}%`}
-            subtext={`${portfolio.winning_trades}/${portfolio.total_trades} trades`}
-            icon={Award}
-          />
-          <PortfolioStatCard
-            label="vs S&P 500"
-            value={formatPct(portfolio.benchmark_return_pct || 0)}
-            icon={Target}
-            highlight={(portfolio.total_return_pct || 0) > (portfolio.benchmark_return_pct || 0)}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="col-span-2 md:col-span-2">
+            <PortfolioStatCard
+              label="Total Value"
+              value={formatCurrency(portfolio.total_value)}
+              icon={Wallet}
+              change={portfolio.total_return_pct || 0}
+              variant="primary"
+            />
+          </div>
+          <div className="col-span-1 md:col-span-1">
+            <PortfolioStatCard
+              label="Cash"
+              value={formatCurrency(portfolio.cash_balance)}
+              icon={DollarSign}
+            />
+          </div>
+          <div className="col-span-1 md:col-span-1">
+            <PortfolioStatCard
+              label="Positions"
+              value={formatCurrency(positionsSummary.totalValue)}
+              icon={Briefcase}
+              subtext={`${positions.length} active`}
+            />
+          </div>
+          <div className="col-span-1 md:col-span-1">
+            <PortfolioStatCard
+              label="Win Rate"
+              value={`${(portfolio.win_rate || 0).toFixed(1)}%`}
+              subtext={`${portfolio.winning_trades}/${portfolio.total_trades} trades`}
+              icon={Award}
+            />
+          </div>
+          <div className="col-span-1 md:col-span-1">
+            <PortfolioStatCard
+              label="vs S&P 500"
+              value={formatPct(portfolio.benchmark_return_pct || 0)}
+              icon={Target}
+              highlight={(portfolio.total_return_pct || 0) > (portfolio.benchmark_return_pct || 0)}
+            />
+          </div>
         </div>
       )}
 

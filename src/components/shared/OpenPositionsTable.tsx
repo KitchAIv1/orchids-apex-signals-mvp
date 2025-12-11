@@ -1,8 +1,9 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { TrendingDown, Loader2, AlertTriangle } from 'lucide-react'
+import { TrendingDown, Loader2, AlertTriangle, Zap } from 'lucide-react'
 import { ApexSignalBadge } from './ApexSignalBadge'
+import { PositionCardMobile } from './PositionCardMobile'
 import type { PaperTrade } from '@/types/database'
 import type { ApexSignal } from '@/services/PaperTradingService'
 
@@ -40,7 +41,7 @@ export function OpenPositionsTable({
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-zinc-100">Open Positions ({positions.length})</h3>
         {positions.length > 0 && (
-          <div className="text-right">
+          <div className="text-right hidden sm:block">
             <span className="text-sm text-zinc-400">Total: </span>
             <span className="text-lg font-bold text-zinc-100">{formatCurrency(positionsSummary.totalValue)}</span>
             <span className={cn('ml-2 text-sm font-medium', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
@@ -49,79 +50,106 @@ export function OpenPositionsTable({
           </div>
         )}
       </div>
+
       {positions.length === 0 ? (
         <p className="text-zinc-500 py-8 text-center">No open positions. Buy a stock to get started!</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400">
-                <th className="pb-3 text-left font-medium">Ticker</th>
-                <th className="pb-3 text-center font-medium">APEX Signal</th>
-                <th className="pb-3 text-right font-medium">Shares</th>
-                <th className="pb-3 text-right font-medium">Entry</th>
-                <th className="pb-3 text-right font-medium">Current</th>
-                <th className="pb-3 text-right font-medium">P&L</th>
-                <th className="pb-3 text-right font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map(p => (
-                <tr key={p.id} className={cn(
-                  "border-b border-zinc-800/50",
-                  p.apex_signal.signalChanged && "bg-amber-500/5"
-                )}>
-                  <td className="py-3 font-semibold text-zinc-100">{p.ticker}</td>
-                  <td className="py-3">
-                    <ApexSignalBadge signal={p.apex_signal} />
-                  </td>
-                  <td className="py-3 text-right text-zinc-300">{p.shares}</td>
-                  <td className="py-3 text-right text-zinc-400">${p.entry_price.toFixed(2)}</td>
-                  <td className="py-3 text-right text-zinc-300">${p.current_price.toFixed(2)}</td>
-                  <td className={cn('py-3 text-right font-medium', p.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                    {formatCurrency(p.unrealized_pnl)} ({formatPct(p.unrealized_pnl_pct)})
-                  </td>
-                  <td className="py-3 text-right">
-                    {p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY' ? (
-                      <button
-                        onClick={() => onSell(p.id)}
-                        disabled={actionLoading === p.id}
-                        className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50 animate-pulse"
-                      >
-                        {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
-                        Exit Now
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onSell(p.id)}
-                        disabled={actionLoading === p.id}
-                        className="flex items-center gap-1 rounded bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50"
-                      >
-                        {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3 w-3" />}
-                        Sell
-                      </button>
-                    )}
-                  </td>
+        <>
+          {/* Mobile Card View */}
+          <div className="space-y-3 md:hidden">
+            {positions.map(p => (
+              <PositionCardMobile
+                key={p.id}
+                position={p}
+                actionLoading={actionLoading}
+                onSell={onSell}
+                formatCurrency={formatCurrency}
+                formatPct={formatPct}
+              />
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-zinc-400">
+                  <th className="pb-3 text-left font-medium pl-4">Ticker</th>
+                  <th className="pb-3 text-center font-medium">APEX Signal</th>
+                  <th className="pb-3 text-right font-medium">Shares</th>
+                  <th className="pb-3 text-right font-medium">Entry</th>
+                  <th className="pb-3 text-right font-medium">Current</th>
+                  <th className="pb-3 text-right font-medium">P&L</th>
+                  <th className="pb-3 text-right font-medium pr-4"></th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-zinc-700 bg-zinc-800/30">
-                <td className="py-3 font-bold text-zinc-100">TOTAL</td>
-                <td className="py-3"></td>
-                <td className="py-3 text-right text-zinc-300">—</td>
-                <td className="py-3 text-right text-zinc-400">{formatCurrency(positionsSummary.totalCost)}</td>
-                <td className="py-3 text-right text-zinc-300">—</td>
-                <td className={cn('py-3 text-right font-bold', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                  {formatCurrency(positionsSummary.totalPnl)} ({formatPct(positionsSummary.totalPnlPct)})
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {positions.map(p => {
+                  const isSignalChange = p.apex_signal.signalChanged
+                  const isSellSignal = p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
+                  
+                  return (
+                    <tr key={p.id} className={cn(
+                      "border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30",
+                      isSignalChange && !isSellSignal && "bg-amber-500/5 hover:bg-amber-500/10",
+                      isSellSignal && "bg-rose-950/10 hover:bg-rose-950/20 border-l-2 border-l-rose-500"
+                    )}>
+                      <td className="py-3 font-bold text-zinc-100 pl-4">{p.ticker}</td>
+                      <td className="py-3">
+                        <div className="flex justify-center">
+                          <ApexSignalBadge signal={p.apex_signal} />
+                        </div>
+                      </td>
+                      <td className="py-3 text-right text-zinc-300">{p.shares}</td>
+                      <td className="py-3 text-right text-zinc-400">${p.entry_price.toFixed(2)}</td>
+                      <td className="py-3 text-right text-zinc-300 font-medium">${p.current_price.toFixed(2)}</td>
+                      <td className={cn('py-3 text-right font-bold', p.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                        {formatCurrency(p.unrealized_pnl)}
+                        <span className="block text-xs opacity-80 font-normal">{formatPct(p.unrealized_pnl_pct)}</span>
+                      </td>
+                      <td className="py-3 text-right pr-4">
+                        {isSellSignal ? (
+                          <button
+                            onClick={() => onSell(p.id)}
+                            disabled={actionLoading === p.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50 animate-pulse shadow-lg shadow-rose-900/20"
+                          >
+                            {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                            Exit Now
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => onSell(p.id)}
+                            disabled={actionLoading === p.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 hover:text-white disabled:opacity-50 transition-all"
+                          >
+                            {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3 w-3" />}
+                            Sell
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-zinc-700 bg-zinc-800/30">
+                  <td className="py-4 font-bold text-zinc-100 pl-4">TOTAL</td>
+                  <td className="py-4"></td>
+                  <td className="py-4 text-right text-zinc-300">—</td>
+                  <td className="py-4 text-right text-zinc-400">{formatCurrency(positionsSummary.totalCost)}</td>
+                  <td className="py-4 text-right text-zinc-300">—</td>
+                  <td className={cn('py-4 text-right font-bold text-lg', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                    {formatCurrency(positionsSummary.totalPnl)}
+                    <span className="text-sm font-medium ml-1">({formatPct(positionsSummary.totalPnlPct)})</span>
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )
 }
-
