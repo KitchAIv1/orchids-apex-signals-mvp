@@ -265,13 +265,28 @@ const AGENT_CONFIGS = {
   catalyst: { weight: 0.15 }
 }
 
-// Scoring boundaries
-const RECOMMENDATION_THRESHOLDS = {
-  BUY: 65,   // Score > 65 = BUY
-  SELL: 35   // Score < 35 = SELL
+// Scoring boundaries (defined in src/services/RecommendationEngine.ts)
+const THRESHOLDS = {
+  BUY_MIN: 65,   // Score > 65 = BUY
+  SELL_MAX: 35   // Score < 35 = SELL
   // 35-65 = HOLD
 }
 ```
+
+## AI Recommendation Reconciliation
+
+The system uses a hybrid approach for recommendations:
+
+1. **AI provides its recommendation** during debate synthesis
+2. **System calculates expected recommendation** from the final score
+3. **Deviations are flagged** when AI disagrees with calculated
+
+This preserves AI's qualitative judgment while maintaining transparency:
+- UI shows warning when AI deviates from calculated recommendation
+- Logs capture all deviations for monitoring
+- Severity: minor (adjacent) vs major (opposite)
+
+See `docs/RECOMMENDATION_ENGINE.md` for full details.
 
 ## External API Integration
 

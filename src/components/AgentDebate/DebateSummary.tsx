@@ -1,19 +1,29 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { AlertTriangle } from 'lucide-react'
 import { AgentService, type ConsensusLevel } from '@/services/AgentService'
-import type { AgentScore } from '@/types/database'
+import { reconcileRecommendation } from '@/services/RecommendationEngine'
+import type { AgentScore, Prediction } from '@/types/database'
 
 type Props = {
   agents: AgentScore[]
   debateSummary?: string | null
+  storedRecommendation?: Prediction['recommendation'] | null
 }
 
-export function DebateSummary({ agents, debateSummary }: Props) {
+export function DebateSummary({ agents, debateSummary, storedRecommendation }: Props) {
   const consensus = AgentService.identifyConsensusLevel(agents)
   const weightedScore = AgentService.calculateWeightedScore(agents)
-  const recommendation = AgentService.getRecommendation(weightedScore)
+  const calculatedRecommendation = AgentService.getRecommendation(weightedScore)
   const confidence = AgentService.getConfidenceFromConsensus(consensus)
+  
+  // Check for AI deviation if we have a stored recommendation
+  const reconciliation = storedRecommendation 
+    ? reconcileRecommendation(weightedScore, storedRecommendation)
+    : null
+  const hasDeviation = reconciliation?.hasDeviation ?? false
+  const recommendation = storedRecommendation ?? calculatedRecommendation
   
   const bullishCount = agents.filter(a => a.score >= 70).length
   const bearishCount = agents.filter(a => a.score < 40).length
@@ -49,14 +59,27 @@ export function DebateSummary({ agents, debateSummary }: Props) {
         </div>
         <div className="text-center">
           <p className="text-xs text-zinc-500 mb-1">Recommendation</p>
-          <p className={cn(
-            'text-lg font-bold',
-            recommendation === 'BUY' && 'text-emerald-400',
-            recommendation === 'HOLD' && 'text-amber-400',
-            recommendation === 'SELL' && 'text-rose-400'
-          )}>
-            {recommendation}
-          </p>
+          <div className="flex flex-col items-center gap-1">
+            <p className={cn(
+              'text-lg font-bold',
+              recommendation === 'BUY' && 'text-emerald-400',
+              recommendation === 'HOLD' && 'text-amber-400',
+              recommendation === 'SELL' && 'text-rose-400'
+            )}>
+              {recommendation}
+            </p>
+            {hasDeviation && reconciliation && (
+              <div 
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20"
+                title={reconciliation.explanation}
+              >
+                <AlertTriangle className="h-3 w-3 text-amber-400" />
+                <span className="text-[10px] text-amber-400">
+                  Score suggests {reconciliation.calculatedRecommendation}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <div className="text-center">
           <p className="text-xs text-zinc-500 mb-1">Confidence</p>

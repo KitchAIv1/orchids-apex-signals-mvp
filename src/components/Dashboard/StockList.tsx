@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStockData } from '@/hooks/useStockData'
 import { useStockPrices } from '@/hooks/useStockPrices'
+import { useRecentCatalysts } from '@/hooks/useRecentCatalysts'
 import { StockCard } from './StockCard'
 import { FilterBar } from './FilterBar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +14,24 @@ export function StockList() {
   const [selectedRecommendation, setSelectedRecommendation] = useState('all')
 
   const symbols = useMemo(() => stocks.map(s => s.ticker), [stocks])
-  const { prices, loading: pricesLoading } = useStockPrices(symbols)
+  const { prices } = useStockPrices(symbols)
+  const { catalysts } = useRecentCatalysts(24)
+
+  const catalystsByTicker = useMemo(() => {
+    const tickerMap = new Map<string, { hasRecent: boolean; urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' }>()
+    for (const catalyst of catalysts) {
+      const existing = tickerMap.get(catalyst.ticker)
+      if (!existing) {
+        tickerMap.set(catalyst.ticker, { hasRecent: true, urgency: catalyst.urgency })
+      } else {
+        const urgencyRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
+        if (urgencyRank[catalyst.urgency] > urgencyRank[existing.urgency]) {
+          tickerMap.set(catalyst.ticker, { hasRecent: true, urgency: catalyst.urgency })
+        }
+      }
+    }
+    return tickerMap
+  }, [catalysts])
 
   const sectors = useMemo(() => {
     const sectorSet = new Set(stocks.map(s => s.sector).filter(Boolean) as string[])
@@ -61,13 +79,18 @@ export function StockList() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredStocks.map(stock => (
-            <StockCard 
-              key={stock.id} 
-              stock={stock} 
-              price={prices[stock.ticker]}
-            />
-          ))}
+          {filteredStocks.map(stock => {
+            const catalystInfo = catalystsByTicker.get(stock.ticker)
+            return (
+              <StockCard 
+                key={stock.id} 
+                stock={stock} 
+                price={prices[stock.ticker]}
+                hasRecentCatalyst={catalystInfo?.hasRecent}
+                catalystUrgency={catalystInfo?.urgency}
+              />
+            )
+          })}
         </div>
       )}
     </div>

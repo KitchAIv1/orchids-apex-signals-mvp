@@ -166,14 +166,27 @@ export async function GET() {
   return NextResponse.json({
     message: 'Catalyst monitor cron endpoint. Use POST to trigger.',
     status: 'ready',
-    gateSystem: 'Multi-gate triggering enabled (5 gates)',
-    gates: [
-      'Gate1: Urgency (HIGH/CRITICAL only)',
-      'Gate2: Boundary Proximity (within 10 points)',
-      'Gate3: Predicted Impact (must reach boundary)',
-      'Gate4: Cooldown (6h min, 3/day max)',
-      'Gate5: Confidence (high confidence resists weak catalysts)'
-    ],
+    schedule: {
+      frequency: '4x daily on trading days (Mon-Fri)',
+      times: [
+        { time: '6:00 AM ET (11:00 UTC)', purpose: 'Pre-market news & analyst actions' },
+        { time: '10:00 AM ET (15:00 UTC)', purpose: 'Post-market-open reactions' },
+        { time: '4:30 PM ET (21:30 UTC)', purpose: 'Market close & after-hours earnings' },
+        { time: '10:00 PM ET (03:00 UTC)', purpose: 'Evening digest & international' }
+      ],
+      rationale: 'Market-aligned schedule catches catalysts when they matter most'
+    },
+    gateSystem: {
+      description: 'Multi-gate triggering prevents unnecessary re-analyses',
+      gates: [
+        { gate: 1, name: 'Urgency', rule: 'Only HIGH/CRITICAL catalysts pass' },
+        { gate: 2, name: 'Boundary Proximity', rule: 'Score within 10 points of recommendation boundary' },
+        { gate: 3, name: 'Predicted Impact', rule: 'Catalyst impact must reach boundary' },
+        { gate: 4, name: 'Cooldown', rule: '6h minimum, max 3 re-analyses per day' },
+        { gate: 5, name: 'Confidence', rule: 'High confidence resists weak catalysts' }
+      ],
+      costSavingsEstimate: '$0.18 saved per skipped re-analysis'
+    },
     recentCatalysts: recentCatalysts || []
   })
 }

@@ -1,4 +1,5 @@
 import { StockList } from '@/components/Dashboard/StockList'
+import { CatalystFeed } from '@/components/Dashboard/CatalystFeed'
 import { Navbar } from '@/components/shared/Navbar'
 import { DisclaimerBanner } from '@/components/shared/DisclaimerBanner'
 
@@ -16,7 +17,15 @@ export default function HomePage() {
           </p>
         </div>
         
-        <StockList />
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          <div>
+            <StockList />
+          </div>
+          
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <CatalystFeed />
+          </aside>
+        </div>
         
         <div className="mt-8">
           <DisclaimerBanner />

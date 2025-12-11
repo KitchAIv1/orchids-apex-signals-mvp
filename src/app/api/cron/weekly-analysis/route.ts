@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { analyzeStock } from '@/services/AIAgentService'
-import type { Stock, StockAnalysisSchedule, Prediction } from '@/types/database'
+import type { Stock, Prediction } from '@/types/database'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -15,51 +15,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: scheduledStocks, error: fetchError } = await supabase
-      .from('stock_analysis_schedule')
-      .select('stock_symbol, stock_id')
-      .eq('is_active', true)
-      .or('next_analysis.is.null,next_analysis.lte.now()') as { data: Pick<StockAnalysisSchedule, 'stock_symbol' | 'stock_id'>[] | null; error: unknown }
+    const { data: activeStocks, error: stockError } = await supabase
+      .from('stocks')
+      .select('ticker')
+      .eq('is_active', true) as { data: Pick<Stock, 'ticker'>[] | null; error: unknown }
 
-    if (fetchError) {
-      console.error('Error fetching scheduled stocks:', fetchError)
-      return NextResponse.json({ error: (fetchError as Error).message }, { status: 500 })
+    if (stockError) {
+      console.error('Error fetching stocks:', stockError)
+      return NextResponse.json({ error: (stockError as Error).message }, { status: 500 })
     }
 
-    if (!scheduledStocks || scheduledStocks.length === 0) {
-      const { data: activeStocks } = await supabase
-        .from('stocks')
-        .select('ticker')
-        .eq('is_active', true)
-        .limit(10) as { data: Pick<Stock, 'ticker'>[] | null }
-
-      if (!activeStocks || activeStocks.length === 0) {
-        return NextResponse.json({ message: 'No stocks to analyze', analyzed: [] })
-      }
-
-      const results = await processStocks(activeStocks.map(s => s.ticker))
+    if (!activeStocks || activeStocks.length === 0) {
       return NextResponse.json({ 
-        message: `Weekly analysis completed for ${results.success.length} stocks`,
-        analyzed: results.success,
-        failed: results.failed
+        message: 'No active stocks to analyze', 
+        analyzed: [],
+        failed: []
       })
     }
 
-    const results = await processStocks(scheduledStocks.map(s => s.stock_symbol))
-
-    for (const ticker of results.success) {
-      await supabase
-        .from('stock_analysis_schedule')
-        // @ts-expect-error - table exists but types not yet regenerated
-        .update({ 
-          last_analyzed: new Date().toISOString(),
-          next_analysis: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        })
-        .eq('stock_symbol', ticker)
-    }
-
+    const results = await processStocks(activeStocks.map(s => s.ticker))
+    
     return NextResponse.json({
       message: `Weekly analysis completed for ${results.success.length} stocks`,
+      totalStocks: activeStocks.length,
       analyzed: results.success,
       failed: results.failed
     })
@@ -132,6 +110,16 @@ async function trackRecommendationChange(ticker: string, newPredictionId?: strin
 export async function GET() {
   return NextResponse.json({ 
     message: 'Weekly analysis cron endpoint. Use POST to trigger.',
-    status: 'ready'
+    status: 'ready',
+    schedule: {
+      frequency: 'Once weekly on Sunday',
+      time: '5:00 AM ET (10:00 UTC)',
+      purpose: 'Refresh all stock analyses before trading week begins'
+    },
+    analysisScope: {
+      description: 'Analyzes all active stocks in the portfolio',
+      agents: ['fundamental', 'technical', 'sentiment', 'macro', 'insider', 'catalyst'],
+      output: 'Updated predictions with BUY/HOLD/SELL recommendations'
+    }
   })
 }

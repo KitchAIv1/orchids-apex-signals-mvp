@@ -29,16 +29,14 @@ export function formatPrice(value: number | null | undefined): string {
   }).format(value)
 }
 
+import { getScoreColorClass, getScoreBgColorClass } from '@/services/RecommendationEngine'
+
 export function getScoreColor(score: number): string {
-  if (score >= 70) return 'text-emerald-500'
-  if (score >= 40) return 'text-amber-500'
-  return 'text-rose-500'
+  return getScoreColorClass(score)
 }
 
 export function getScoreBgColor(score: number): string {
-  if (score >= 70) return 'bg-emerald-500/10 border-emerald-500/30'
-  if (score >= 40) return 'bg-amber-500/10 border-amber-500/30'
-  return 'bg-rose-500/10 border-rose-500/30'
+  return getScoreBgColorClass(score)
 }
 
 export function getRecommendationColor(rec: string): string {

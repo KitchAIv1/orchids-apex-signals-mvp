@@ -1,8 +1,15 @@
 import { openai } from '@/lib/openai'
 import { AGENT_CONFIGS, buildAnalysisPrompt, type AgentPromptConfig } from '@/lib/prompts'
-import type { AgentName, Stock } from '@/types/database'
+import type { AgentName, Stock, RecommendationHistory } from '@/types/database'
 import { createClient } from '@supabase/supabase-js'
-import { getStockMarketData, formatDataForAgent, type StockMarketData } from './MarketDataService'
+import { 
+  getStockMarketData, 
+  formatDataForAgent, 
+  buildHistoryContext,
+  type StockMarketData,
+  type RecentHistoryContext 
+} from './MarketDataService'
+import { reconcileRecommendation, THRESHOLDS, type Recommendation } from './RecommendationEngine'
 
 type AgentAnalysisResult = {
   score: number
@@ -60,9 +67,12 @@ const DEBATE_SYNTHESIS_SCHEMA = {
 export async function runAgentAnalysis(
   agentConfig: AgentPromptConfig,
   stock: Stock,
-  marketData?: StockMarketData
+  marketData?: StockMarketData,
+  historyContext?: RecentHistoryContext
 ): Promise<AgentAnalysisResult> {
-  const liveData = marketData ? formatDataForAgent(agentConfig.name, marketData) : undefined
+  const liveData = marketData 
+    ? formatDataForAgent(agentConfig.name, marketData, historyContext) 
+    : undefined
 
   const userPrompt = buildAnalysisPrompt(
     stock.ticker,
@@ -100,19 +110,34 @@ export async function runAllAgents(stock: Stock): Promise<Map<AgentName, AgentAn
   const agentNames: AgentName[] = ['fundamental', 'technical', 'sentiment', 'macro', 'insider', 'catalyst']
   const results = new Map<AgentName, AgentAnalysisResult>()
 
+  // Fetch market data and recent history in parallel
   let marketData: StockMarketData | undefined
+  let historyContext: RecentHistoryContext | undefined
+
   try {
-    marketData = await getStockMarketData(stock.ticker)
+    const [marketResult, historyResult] = await Promise.all([
+      getStockMarketData(stock.ticker),
+      fetchRecentHistory(stock.id)
+    ])
+    
+    marketData = marketResult
     if (marketData.errors.length > 0) {
       console.warn(`Market data fetch warnings for ${stock.ticker}:`, marketData.errors)
     }
+    
+    historyContext = historyResult
+    if (historyContext.recommendations.length > 0) {
+      console.log(`📊 Loaded ${historyContext.recommendations.length} recent events for ${stock.ticker}`)
+    }
   } catch (error) {
-    console.error(`Failed to fetch market data for ${stock.ticker}:`, error)
+    console.error(`Failed to fetch data for ${stock.ticker}:`, error)
   }
 
   const promises = agentNames.map(async (name) => {
     const config = AGENT_CONFIGS[name]
-    const result = await runAgentAnalysis(config, stock, marketData)
+    // Only pass history context to catalyst agent
+    const contextForAgent = name === 'catalyst' ? historyContext : undefined
+    const result = await runAgentAnalysis(config, stock, marketData, contextForAgent)
     return { name, result }
   })
 
@@ -122,6 +147,28 @@ export async function runAllAgents(stock: Stock): Promise<Map<AgentName, AgentAn
   }
 
   return results
+}
+
+/**
+ * Fetch recent recommendation history for a stock (last 14 days)
+ */
+async function fetchRecentHistory(stockId: string): Promise<RecentHistoryContext> {
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+  
+  const { data, error } = await supabase
+    .from('recommendation_history')
+    .select('*')
+    .eq('stock_id', stockId)
+    .gte('changed_at', fourteenDaysAgo)
+    .order('changed_at', { ascending: false })
+    .limit(10)
+  
+  if (error) {
+    console.error('Failed to fetch recommendation history:', error)
+    return buildHistoryContext([])
+  }
+  
+  return buildHistoryContext((data || []) as RecommendationHistory[])
 }
 
 export async function synthesizeDebate(
@@ -145,7 +192,16 @@ Key Metrics: ${result.key_metric_1}, ${result.key_metric_2}, ${result.key_metric
         role: 'system',
         content: `You are a senior portfolio manager synthesizing a multi-agent debate about a stock.
 Weigh each agent's opinion according to their weight. Resolve conflicts logically.
-Be decisive but acknowledge uncertainty where appropriate.`
+Be decisive but acknowledge uncertainty where appropriate.
+
+IMPORTANT - Recommendation Thresholds:
+- Score > ${THRESHOLDS.BUY_MIN} = BUY
+- Score ${THRESHOLDS.SELL_MAX}-${THRESHOLDS.BUY_MIN} = HOLD
+- Score < ${THRESHOLDS.SELL_MAX} = SELL
+
+Your recommendation should generally align with these thresholds based on the final score.
+However, you may deviate if there's a compelling qualitative reason (e.g., imminent catalyst).
+If you deviate, your confidence should reflect the uncertainty.`
       },
       {
         role: 'user',
@@ -179,8 +235,22 @@ export async function persistAnalysis(
   stock: Stock,
   agentResults: Map<AgentName, AgentAnalysisResult>,
   synthesis: DebateSynthesisResult
-): Promise<{ predictionId: string }> {
+): Promise<{ predictionId: string; reconciliation: ReturnType<typeof reconcileRecommendation> }> {
   const timestamp = new Date().toISOString()
+  
+  // Reconcile AI recommendation with calculated
+  const reconciliation = reconcileRecommendation(
+    synthesis.finalScore,
+    synthesis.recommendation as Recommendation
+  )
+  
+  if (reconciliation.hasDeviation) {
+    console.warn(
+      `⚠️ Recommendation Deviation for ${stock.ticker}:`,
+      `AI=${synthesis.recommendation}, Calculated=${reconciliation.calculatedRecommendation}`,
+      `Score=${synthesis.finalScore}, Severity=${reconciliation.deviationSeverity}`
+    )
+  }
 
   const agentScoreInserts = Array.from(agentResults.entries()).map(([name, result]) => ({
     stock_id: stock.id,
@@ -252,13 +322,15 @@ export async function persistAnalysis(
     })
   }
 
-  return { predictionId: prediction.id }
+  return { predictionId: prediction.id, reconciliation }
 }
 
 export async function analyzeStock(ticker: string): Promise<{
   success: boolean
   predictionId?: string
   recommendation?: string
+  calculatedRecommendation?: string
+  hasDeviation?: boolean
   score?: number
   error?: string
 }> {
@@ -275,12 +347,14 @@ export async function analyzeStock(ticker: string): Promise<{
   try {
     const agentResults = await runAllAgents(stock as Stock)
     const synthesis = await synthesizeDebate(stock as Stock, agentResults)
-    const { predictionId } = await persistAnalysis(stock as Stock, agentResults, synthesis)
+    const { predictionId, reconciliation } = await persistAnalysis(stock as Stock, agentResults, synthesis)
 
     return { 
       success: true, 
       predictionId,
       recommendation: synthesis.recommendation,
+      calculatedRecommendation: reconciliation.calculatedRecommendation,
+      hasDeviation: reconciliation.hasDeviation,
       score: synthesis.finalScore
     }
   } catch (err) {

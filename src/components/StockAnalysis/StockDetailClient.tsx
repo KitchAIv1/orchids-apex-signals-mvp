@@ -7,11 +7,12 @@ import { DisclaimerBanner } from '@/components/shared/DisclaimerBanner'
 import { StockOverview } from './StockOverview'
 import { RiskFactorsList } from './RiskFactorsList'
 import { AgentDebateRoom } from '@/components/AgentDebate/AgentDebateRoom'
-import { CatalystTimeline } from '@/components/shared/CatalystTimeline'
-import { RecommendationChangeCard } from '@/components/shared/RecommendationChangeCard'
+import { ConflictSummary } from '@/components/AgentDebate/ConflictSummary'
+import { RecommendationJourney } from '@/components/shared/RecommendationJourney'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import type { CatalystUpdate } from '@/services/RecommendationHistoryService'
+import { AgentService } from '@/services/AgentService'
+import { reconcileRecommendation } from '@/services/RecommendationEngine'
 
 type Props = {
   ticker: string
@@ -22,15 +23,19 @@ export function StockDetailClient({ ticker }: Props) {
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
 
-  const catalystUpdates = useMemo<CatalystUpdate[]>(() => {
-    if (!analysis?.recommendationChanges) return []
-    return analysis.recommendationChanges.map(change => ({
-      ...change,
-      ticker: analysis.ticker,
-      scoreChange: (change.new_score ?? 0) - (change.previous_score ?? 0),
-      isUpgrade: (change.new_score ?? 0) > (change.previous_score ?? 0)
-    }))
+  // Calculate recommendation and deviation info
+  const calculatedScore = useMemo(() => {
+    if (!analysis?.agentScores?.length) return analysis?.prediction?.final_score ?? 0
+    return AgentService.calculateWeightedScore(analysis.agentScores)
   }, [analysis])
+
+  const recommendation = analysis?.prediction?.recommendation 
+    ?? AgentService.getRecommendation(calculatedScore)
+
+  const reconciliation = useMemo(() => {
+    if (!analysis?.prediction?.recommendation) return null
+    return reconcileRecommendation(calculatedScore, analysis.prediction.recommendation)
+  }, [calculatedScore, analysis?.prediction?.recommendation])
 
   const handleRunAnalysis = async () => {
     setAnalyzing(true)
@@ -89,14 +94,30 @@ export function StockDetailClient({ ticker }: Props) {
         ) : (
           <div className="space-y-8">
             <StockOverview analysis={analysis} />
+            
+            {/* Conflict Summary - Shows bull vs bear at a glance */}
+            {analysis.agentScores.length > 0 && (
+              <ConflictSummary 
+                agents={analysis.agentScores}
+                recommendation={recommendation}
+                hasDeviation={reconciliation?.hasDeviation}
+                calculatedRecommendation={reconciliation?.calculatedRecommendation}
+              />
+            )}
+            
             <AgentDebateRoom 
               agents={analysis.agentScores} 
               debateSummary={analysis.prediction?.debate_summary}
+              storedRecommendation={analysis.prediction?.recommendation}
             />
-            <div className="grid gap-6 lg:grid-cols-2">
-              <RecommendationChangeCard changes={analysis.recommendationChanges} />
-              <CatalystTimeline catalysts={catalystUpdates} />
-            </div>
+            
+            {/* Recommendation Journey - Shows how we got here */}
+            <RecommendationJourney 
+              changes={analysis.recommendationChanges}
+              currentRecommendation={recommendation}
+              currentScore={calculatedScore}
+            />
+            
             <RiskFactorsList risks={analysis.prediction?.risk_factors} />
             <DisclaimerBanner />
           </div>

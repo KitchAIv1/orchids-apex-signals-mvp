@@ -7,11 +7,13 @@ import { AgentService } from '@/services/AgentService'
 import type { StockWithLatestData } from '@/services/StockAnalysisService'
 import type { StockPrice } from '@/hooks/useStockPrices'
 import { cn } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Zap } from 'lucide-react'
 
 type Props = {
   stock: StockWithLatestData
   price?: StockPrice
+  hasRecentCatalyst?: boolean
+  catalystUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 }
 
 function formatPrice(price: number): string {
@@ -28,7 +30,7 @@ function formatPercent(percent: number): string {
   return `${sign}${percent.toFixed(2)}%`
 }
 
-export function StockCard({ stock, price }: Props) {
+export function StockCard({ stock, price, hasRecentCatalyst, catalystUrgency }: Props) {
   const { ticker, company_name, sector, latestPrediction, agentScores } = stock
   
   const calculatedScore = agentScores.length > 0 
@@ -71,6 +73,20 @@ export function StockCard({ stock, price }: Props) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2.5 mb-1">
                 <span className="text-lg font-semibold text-zinc-50 tracking-tight font-mono">{ticker}</span>
+                {hasRecentCatalyst && (
+                  <span 
+                    className={cn(
+                      'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium',
+                      catalystUrgency === 'CRITICAL' && 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
+                      catalystUrgency === 'HIGH' && 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+                      (!catalystUrgency || catalystUrgency === 'MEDIUM' || catalystUrgency === 'LOW') && 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                    )}
+                    title="Recent catalyst activity"
+                  >
+                    <Zap className="h-2.5 w-2.5" />
+                    NEW
+                  </span>
+                )}
                 {sector && (
                   <span className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                     {sector}

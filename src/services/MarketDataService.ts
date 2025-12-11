@@ -1,6 +1,15 @@
 import { getStockQuote, getStockFundamentals, getTechnicalData, type StockQuote, type StockFundamentals, type TechnicalData } from './YahooFinanceService'
 import { getNewsSentiment, getInsiderSentiment, getAnalystRecommendations, getEarningsCalendar, getUpgrades, type NewsSentiment, type InsiderSentiment, type AnalystRecommendation, type EarningsCalendar } from './FinnhubService'
 import { getMacroIndicators, formatMacroSummary, getMacroSignal, type MacroIndicators } from './FREDService'
+import type { RecommendationHistory } from '@/types/database'
+
+// Recent history context for catalyst agent
+export type RecentHistoryContext = {
+  recommendations: RecommendationHistory[]
+  hasRecentPositiveCatalyst: boolean
+  hasRecentNegativeCatalyst: boolean
+  netScoreChange: number
+}
 
 type CacheEntry<T> = {
   data: T
@@ -165,7 +174,8 @@ export async function getStockMarketData(ticker: string): Promise<StockMarketDat
 
 export function formatDataForAgent(
   agentType: 'fundamental' | 'technical' | 'sentiment' | 'macro' | 'insider' | 'catalyst',
-  data: StockMarketData
+  data: StockMarketData,
+  historyContext?: RecentHistoryContext
 ): string {
   switch (agentType) {
     case 'fundamental':
@@ -179,7 +189,7 @@ export function formatDataForAgent(
     case 'insider':
       return formatInsiderData(data)
     case 'catalyst':
-      return formatCatalystData(data)
+      return formatCatalystData(data, historyContext)
     default:
       return ''
   }
@@ -380,8 +390,40 @@ function formatInsiderData(data: StockMarketData): string {
   return lines.join('\n')
 }
 
-function formatCatalystData(data: StockMarketData): string {
-  const lines: string[] = ['=== UPCOMING CATALYSTS ===']
+function formatCatalystData(
+  data: StockMarketData,
+  historyContext?: RecentHistoryContext
+): string {
+  const lines: string[] = ['=== CATALYST ANALYSIS ===']
+
+  // CRITICAL: Include recent catalyst-driven changes from our system
+  if (historyContext && historyContext.recommendations.length > 0) {
+    lines.push('')
+    lines.push('--- RECENT CATALYST-DRIVEN SCORE CHANGES (FROM OUR SYSTEM) ---')
+    lines.push('These are actual events that recently impacted this stock\'s recommendation:')
+    
+    historyContext.recommendations.slice(0, 5).forEach((rec) => {
+      const scoreChange = (rec.new_score ?? 0) - (rec.previous_score ?? 0)
+      const direction = scoreChange >= 0 ? '↑' : '↓'
+      const date = new Date(rec.changed_at).toLocaleDateString()
+      lines.push(`${date}: ${rec.change_reason || 'Score updated'}`)
+      lines.push(`  Score: ${rec.previous_score ?? '?'} → ${rec.new_score} (${direction}${Math.abs(scoreChange).toFixed(1)} pts)`)
+      lines.push(`  Recommendation: ${rec.previous_recommendation || '?'} → ${rec.new_recommendation}`)
+    })
+
+    lines.push('')
+    lines.push(`Net Score Change (recent): ${historyContext.netScoreChange >= 0 ? '+' : ''}${historyContext.netScoreChange.toFixed(1)} pts`)
+    if (historyContext.hasRecentPositiveCatalyst) {
+      lines.push('⚡ POSITIVE CATALYST MOMENTUM detected')
+    }
+    if (historyContext.hasRecentNegativeCatalyst) {
+      lines.push('⚠️ NEGATIVE CATALYST PRESSURE detected')
+    }
+  }
+
+  // Upcoming catalysts from external APIs
+  lines.push('')
+  lines.push('=== UPCOMING CATALYSTS ===')
 
   if (data.earnings && data.earnings.length > 0) {
     lines.push('')
@@ -424,4 +466,33 @@ function formatCatalystData(data: StockMarketData): string {
 
 export function clearCache(): void {
   cache.clear()
+}
+
+/**
+ * Build history context from recent recommendation changes
+ */
+export function buildHistoryContext(
+  recommendations: RecommendationHistory[]
+): RecentHistoryContext {
+  const netScoreChange = recommendations.reduce((sum, rec) => {
+    const change = (rec.new_score ?? 0) - (rec.previous_score ?? 0)
+    return sum + change
+  }, 0)
+
+  const hasRecentPositiveCatalyst = recommendations.some(rec => {
+    const change = (rec.new_score ?? 0) - (rec.previous_score ?? 0)
+    return change >= 5
+  })
+
+  const hasRecentNegativeCatalyst = recommendations.some(rec => {
+    const change = (rec.new_score ?? 0) - (rec.previous_score ?? 0)
+    return change <= -5
+  })
+
+  return {
+    recommendations,
+    hasRecentPositiveCatalyst,
+    hasRecentNegativeCatalyst,
+    netScoreChange
+  }
 }

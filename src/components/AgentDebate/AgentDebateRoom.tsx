@@ -5,16 +5,17 @@ import { AgentCard } from './AgentCard'
 import { AgentReasoningPanel } from './AgentReasoningPanel'
 import { DebateSummary } from './DebateSummary'
 import { AgentService, AGENT_INFO } from '@/services/AgentService'
-import type { AgentScore, AgentName } from '@/types/database'
+import type { AgentScore, AgentName, Prediction } from '@/types/database'
 
 type Props = {
   agents: AgentScore[]
   debateSummary?: string | null
+  storedRecommendation?: Prediction['recommendation'] | null
 }
 
 const AGENT_ORDER: AgentName[] = ['fundamental', 'technical', 'sentiment', 'macro', 'insider', 'catalyst']
 
-export function AgentDebateRoom({ agents, debateSummary }: Props) {
+export function AgentDebateRoom({ agents, debateSummary, storedRecommendation }: Props) {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(
     agents[0]?.agent_name || null
   )
@@ -66,7 +67,11 @@ export function AgentDebateRoom({ agents, debateSummary }: Props) {
         <AgentReasoningPanel agent={selected} info={selectedInfo} />
       )}
       
-      <DebateSummary agents={sortedAgents} debateSummary={debateSummary} />
+      <DebateSummary 
+        agents={sortedAgents} 
+        debateSummary={debateSummary} 
+        storedRecommendation={storedRecommendation}
+      />
     </div>
   )
 }

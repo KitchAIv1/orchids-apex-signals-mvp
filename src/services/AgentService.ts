@@ -1,4 +1,9 @@
 import type { AgentScore, AgentName } from '@/types/database'
+import { 
+  calculateRecommendation, 
+  getScoreLabel as getScoreLabelFromEngine,
+  THRESHOLDS 
+} from './RecommendationEngine'
 
 export type ConsensusLevel = 'STRONG' | 'MODERATE' | 'WEAK' | 'DIVIDED'
 
@@ -86,15 +91,18 @@ export class AgentService {
   }
 
   static getScoreLabel(score: number): 'BULLISH' | 'NEUTRAL' | 'BEARISH' {
-    if (score >= 70) return 'BULLISH'
-    if (score >= 40) return 'NEUTRAL'
-    return 'BEARISH'
+    return getScoreLabelFromEngine(score)
   }
 
   static getRecommendation(score: number): 'BUY' | 'HOLD' | 'SELL' {
-    if (score > 70) return 'BUY'
-    if (score >= 40) return 'HOLD'
-    return 'SELL'
+    return calculateRecommendation(score)
+  }
+
+  /**
+   * Get threshold values for reference
+   */
+  static getThresholds() {
+    return THRESHOLDS
   }
 
   static getConfidenceFromConsensus(consensus: ConsensusLevel): 'HIGH' | 'MEDIUM' | 'LOW' {

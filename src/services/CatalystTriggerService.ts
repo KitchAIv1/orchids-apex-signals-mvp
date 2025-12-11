@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { CatalystEvent, Prediction } from '@/types/database'
+import { CATALYST_BOUNDARIES, calculateBoundaryProximity as calcProximity } from './RecommendationEngine'
 
 type CatalystUrgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type CatalystType = 
@@ -28,7 +29,8 @@ interface GateResult {
   reason: string
 }
 
-const RECOMMENDATION_BOUNDARIES = [35, 45, 65, 75]
+// Use centralized boundaries from RecommendationEngine
+const RECOMMENDATION_BOUNDARIES = [...CATALYST_BOUNDARIES]
 
 const COOLDOWN_HOURS = 6
 const MAX_REANALYSES_PER_DAY = 3
