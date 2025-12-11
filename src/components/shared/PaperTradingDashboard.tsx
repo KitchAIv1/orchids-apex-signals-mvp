@@ -195,8 +195,8 @@ export function PaperTradingDashboard() {
       )}
 
       {portfolio && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <div className="col-span-2 md:col-span-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="col-span-2 md:col-span-2 lg:col-span-2">
             <PortfolioStatCard
               label="Total Value"
               value={formatCurrency(portfolio.total_value)}
@@ -205,14 +205,14 @@ export function PaperTradingDashboard() {
               variant="primary"
             />
           </div>
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 lg:col-span-1">
             <PortfolioStatCard
               label="Cash"
               value={formatCurrency(portfolio.cash_balance)}
               icon={DollarSign}
             />
           </div>
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 lg:col-span-1">
             <PortfolioStatCard
               label="Positions"
               value={formatCurrency(positionsSummary.totalValue)}
@@ -220,7 +220,7 @@ export function PaperTradingDashboard() {
               subtext={`${positions.length} active`}
             />
           </div>
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 lg:col-span-1">
             <PortfolioStatCard
               label="Win Rate"
               value={`${(portfolio.win_rate || 0).toFixed(1)}%`}
@@ -228,7 +228,7 @@ export function PaperTradingDashboard() {
               icon={Award}
             />
           </div>
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 lg:col-span-1">
             <PortfolioStatCard
               label="vs S&P 500"
               value={formatPct(portfolio.benchmark_return_pct || 0)}

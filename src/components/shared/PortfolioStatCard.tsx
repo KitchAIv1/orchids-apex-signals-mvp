@@ -26,7 +26,7 @@ export function PortfolioStatCard({
 
   return (
     <div className={cn(
-      "rounded-xl border p-4 transition-all duration-300",
+      "rounded-xl border p-4 transition-all duration-300 h-full flex flex-col justify-between",
       isPrimary 
         ? "bg-gradient-to-br from-zinc-900 to-zinc-900/50 border-amber-500/20 shadow-lg shadow-amber-900/5" 
         : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
