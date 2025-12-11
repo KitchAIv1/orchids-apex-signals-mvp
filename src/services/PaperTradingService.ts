@@ -1,9 +1,19 @@
 import { supabase } from '@/lib/supabase'
-import type { PaperPortfolio, PaperTrade } from '@/types/database'
+import type { PaperPortfolio, PaperTrade, Prediction } from '@/types/database'
 import { getStockQuote } from './YahooFinanceService'
 
 const INITIAL_BALANCE = 100000
 const DEMO_PORTFOLIO_ID = '00000000-0000-0000-0000-000000000001'
+
+// APEX signal status for advisory mode
+export type ApexSignal = {
+  currentRecommendation: 'BUY' | 'HOLD' | 'SELL' | null
+  currentScore: number | null
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | null
+  lastAnalyzedAt: string | null
+  signalChanged: boolean // true if current differs from entry signal
+  entrySignal: string | null
+}
 
 export class PaperTradingService {
   static async getOrCreatePortfolio(): Promise<PaperPortfolio> {
@@ -152,6 +162,7 @@ export class PaperTradingService {
     pre_market_change_pct: number | null
     post_market_price: number | null
     post_market_change_pct: number | null
+    apex_signal: ApexSignal
   })[]> {
     const { data: trades } = await supabase
       .from('paper_trades')
@@ -163,14 +174,20 @@ export class PaperTradingService {
     if (!trades || trades.length === 0) return []
 
     const tickers = [...new Set(trades.map(t => t.ticker))]
-    const quotes = await Promise.all(tickers.map(t => getStockQuote(t).catch(() => ({ 
-      price: 0, 
-      marketState: 'CLOSED' as const,
-      preMarketPrice: null,
-      preMarketChangePercent: null,
-      postMarketPrice: null,
-      postMarketChangePercent: null
-    }))))
+    
+    // Fetch quotes and APEX signals in parallel
+    const [quotes, apexSignals] = await Promise.all([
+      Promise.all(tickers.map(t => getStockQuote(t).catch(() => ({ 
+        price: 0, 
+        marketState: 'CLOSED' as const,
+        preMarketPrice: null,
+        preMarketChangePercent: null,
+        postMarketPrice: null,
+        postMarketChangePercent: null
+      })))),
+      this.getApexSignalsForTickers(tickers)
+    ])
+    
     const quoteMap = Object.fromEntries(tickers.map((t, i) => [t, quotes[i]]))
 
     return trades.map(trade => {
@@ -179,6 +196,13 @@ export class PaperTradingService {
       const currentValue = currentPrice * trade.shares
       const unrealizedPnl = currentValue - trade.total_cost
       const unrealizedPnlPct = (unrealizedPnl / trade.total_cost) * 100
+      
+      const apexData = apexSignals[trade.ticker]
+      const entrySignal = trade.ai_direction || null
+      const signalChanged = entrySignal !== null && 
+        apexData?.currentRecommendation !== null && 
+        entrySignal !== apexData?.currentRecommendation
+      
       return { 
         ...trade, 
         current_price: currentPrice, 
@@ -188,9 +212,82 @@ export class PaperTradingService {
         pre_market_price: quote?.preMarketPrice ?? null,
         pre_market_change_pct: quote?.preMarketChangePercent ?? null,
         post_market_price: quote?.postMarketPrice ?? null,
-        post_market_change_pct: quote?.postMarketChangePercent ?? null
+        post_market_change_pct: quote?.postMarketChangePercent ?? null,
+        apex_signal: {
+          currentRecommendation: apexData?.currentRecommendation ?? null,
+          currentScore: apexData?.currentScore ?? null,
+          confidence: apexData?.confidence ?? null,
+          lastAnalyzedAt: apexData?.lastAnalyzedAt ?? null,
+          signalChanged,
+          entrySignal
+        }
       }
     })
+  }
+
+  /**
+   * Fetch current APEX signals for multiple tickers (Advisory Mode)
+   */
+  static async getApexSignalsForTickers(tickers: string[]): Promise<Record<string, {
+    currentRecommendation: 'BUY' | 'HOLD' | 'SELL'
+    currentScore: number
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+    lastAnalyzedAt: string
+  } | null>> {
+    if (tickers.length === 0) return {}
+
+    // Get stock IDs for tickers
+    const { data: stocks } = await supabase
+      .from('stocks')
+      .select('id, ticker')
+      .in('ticker', tickers.map(t => t.toUpperCase()))
+
+    if (!stocks || stocks.length === 0) {
+      return Object.fromEntries(tickers.map(t => [t, null]))
+    }
+
+    const stockIdMap = Object.fromEntries(stocks.map(s => [s.id, s.ticker]))
+    const stockIds = stocks.map(s => s.id)
+
+    // Get latest prediction for each stock
+    const { data: predictions } = await supabase
+      .from('predictions')
+      .select('stock_id, recommendation, final_score, confidence, predicted_at')
+      .in('stock_id', stockIds)
+      .order('predicted_at', { ascending: false })
+
+    // Group by stock_id and take only the latest
+    const latestByStock: Record<string, Prediction> = {}
+    for (const pred of (predictions || [])) {
+      const ticker = stockIdMap[pred.stock_id]
+      if (ticker && !latestByStock[ticker]) {
+        latestByStock[ticker] = pred as Prediction
+      }
+    }
+
+    // Build result map
+    const result: Record<string, {
+      currentRecommendation: 'BUY' | 'HOLD' | 'SELL'
+      currentScore: number
+      confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+      lastAnalyzedAt: string
+    } | null> = {}
+
+    for (const ticker of tickers) {
+      const pred = latestByStock[ticker.toUpperCase()]
+      if (pred) {
+        result[ticker] = {
+          currentRecommendation: pred.recommendation as 'BUY' | 'HOLD' | 'SELL',
+          currentScore: Number(pred.final_score),
+          confidence: pred.confidence as 'HIGH' | 'MEDIUM' | 'LOW',
+          lastAnalyzedAt: pred.predicted_at
+        }
+      } else {
+        result[ticker] = null
+      }
+    }
+
+    return result
   }
 
   static async getTradeHistory(): Promise<PaperTrade[]> {

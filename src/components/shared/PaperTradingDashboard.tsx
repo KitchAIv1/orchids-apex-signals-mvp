@@ -5,11 +5,18 @@ import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { 
   Wallet, TrendingUp, TrendingDown, DollarSign, 
-  RotateCcw, Loader2, AlertCircle, Target, Award, Briefcase
+  RotateCcw, Loader2, AlertCircle, Target, Award, Briefcase,
+  AlertTriangle, Zap
 } from 'lucide-react'
 import type { PaperPortfolio, PaperTrade } from '@/types/database'
+import type { ApexSignal } from '@/services/PaperTradingService'
 
-type Position = PaperTrade & { current_price: number; unrealized_pnl: number; unrealized_pnl_pct: number }
+type Position = PaperTrade & { 
+  current_price: number
+  unrealized_pnl: number
+  unrealized_pnl_pct: number
+  apex_signal: ApexSignal
+}
 type PortfolioWithValue = PaperPortfolio & { positions_value: number; open_positions: number }
 
 export function PaperTradingDashboard() {
@@ -245,22 +252,27 @@ export function PaperTradingDashboard() {
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400">
                   <th className="pb-3 text-left font-medium">Ticker</th>
+                  <th className="pb-3 text-center font-medium">APEX Signal</th>
                   <th className="pb-3 text-right font-medium">Shares</th>
                   <th className="pb-3 text-right font-medium">Entry</th>
                   <th className="pb-3 text-right font-medium">Current</th>
-                  <th className="pb-3 text-right font-medium">Value</th>
                   <th className="pb-3 text-right font-medium">P&L</th>
                   <th className="pb-3 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {positions.map(p => (
-                  <tr key={p.id} className="border-b border-zinc-800/50">
+                  <tr key={p.id} className={cn(
+                    "border-b border-zinc-800/50",
+                    p.apex_signal.signalChanged && "bg-amber-500/5"
+                  )}>
                     <td className="py-3 font-semibold text-zinc-100">{p.ticker}</td>
+                    <td className="py-3">
+                      <ApexSignalBadge signal={p.apex_signal} />
+                    </td>
                     <td className="py-3 text-right text-zinc-300">{p.shares}</td>
                     <td className="py-3 text-right text-zinc-400">${p.entry_price.toFixed(2)}</td>
                     <td className="py-3 text-right text-zinc-300">${p.current_price.toFixed(2)}</td>
-                    <td className="py-3 text-right text-zinc-100 font-medium">{formatCurrency(p.current_price * p.shares)}</td>
                     <td className={cn('py-3 text-right font-medium', p.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                       {formatCurrency(p.unrealized_pnl)} ({formatPct(p.unrealized_pnl_pct)})
                     </td>
@@ -280,10 +292,10 @@ export function PaperTradingDashboard() {
               <tfoot>
                 <tr className="border-t-2 border-zinc-700 bg-zinc-800/30">
                   <td className="py-3 font-bold text-zinc-100">TOTAL</td>
+                  <td className="py-3"></td>
                   <td className="py-3 text-right text-zinc-300">—</td>
                   <td className="py-3 text-right text-zinc-400">{formatCurrency(positionsSummary.totalCost)}</td>
                   <td className="py-3 text-right text-zinc-300">—</td>
-                  <td className="py-3 text-right text-zinc-100 font-bold">{formatCurrency(positionsSummary.totalValue)}</td>
                   <td className={cn('py-3 text-right font-bold', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                     {formatCurrency(positionsSummary.totalPnl)} ({formatPct(positionsSummary.totalPnlPct)})
                   </td>
@@ -357,6 +369,77 @@ function StatCard({ label, value, icon: Icon, change, subtext, highlight }: {
         </p>
       )}
       {subtext && <p className="mt-1 text-sm text-zinc-500">{subtext}</p>}
+    </div>
+  )
+}
+
+function ApexSignalBadge({ signal }: { signal: ApexSignal }) {
+  const { currentRecommendation, currentScore, signalChanged, entrySignal } = signal
+
+  if (!currentRecommendation) {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="text-[10px] text-zinc-600 uppercase">No Signal</span>
+        <span className="text-xs text-zinc-500">Not in APEX</span>
+      </div>
+    )
+  }
+
+  const recColor = {
+    BUY: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    HOLD: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    SELL: 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+  }[currentRecommendation]
+
+  // Determine if this is a problematic signal change (entered BUY, now SELL or vice versa)
+  const isMajorChange = signalChanged && (
+    (entrySignal === 'BUY' && currentRecommendation === 'SELL') ||
+    (entrySignal === 'SELL' && currentRecommendation === 'BUY')
+  )
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1.5">
+        <span className={cn(
+          'px-2 py-0.5 rounded text-xs font-bold border',
+          recColor
+        )}>
+          {currentRecommendation}
+        </span>
+        {currentScore !== null && (
+          <span className="text-xs text-zinc-500">{currentScore}</span>
+        )}
+      </div>
+      
+      {signalChanged && (
+        <div className={cn(
+          'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+          isMajorChange 
+            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+        )}>
+          {isMajorChange ? (
+            <AlertTriangle className="h-2.5 w-2.5" />
+          ) : (
+            <Zap className="h-2.5 w-2.5" />
+          )}
+          <span>
+            {entrySignal} → {currentRecommendation}
+          </span>
+        </div>
+      )}
+      
+      {!signalChanged && entrySignal && (
+        <span className="text-[10px] text-zinc-600">
+          Entry: {entrySignal}
+        </span>
+      )}
+      
+      {!entrySignal && (
+        <span className="text-[10px] text-zinc-600">
+          Manual trade
+        </span>
+      )}
     </div>
   )
 }
