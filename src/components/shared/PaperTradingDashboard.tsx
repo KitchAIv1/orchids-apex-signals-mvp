@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { PaperPortfolio, PaperTrade } from '@/types/database'
 import type { ApexSignal } from '@/services/PaperTradingService'
+import { ApexSignalBadge } from './ApexSignalBadge'
+import { PortfolioStatCard } from './PortfolioStatCard'
 
 type Position = PaperTrade & { 
   current_price: number
@@ -40,6 +42,19 @@ export function PaperTradingDashboard() {
     const totalPnlPct = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0
     return { totalValue, totalCost, totalPnl, totalPnlPct }
   }, [positions])
+
+  // P1: Detect positions with signal changes (especially exit signals)
+  const signalAlerts = useMemo(() => {
+    const exitSignals = positions.filter(p => 
+      p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
+    )
+    const signalChanges = positions.filter(p => p.apex_signal.signalChanged)
+    const manualTrades = positions.filter(p => !p.apex_signal.entrySignal)
+    return { exitSignals, signalChanges, manualTrades }
+  }, [positions])
+
+  // P2: Check if this is a linked trade from predictions
+  const isLinkedTrade = Boolean(predictionId && aiDirection)
 
   useEffect(() => {
     const ticker = searchParams.get('ticker')
@@ -160,32 +175,62 @@ export function PaperTradingDashboard() {
         </div>
       )}
 
+      {/* P1: Exit Signal Alert Banner */}
+      {signalAlerts.exitSignals.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg bg-rose-500/10 border border-rose-500/30 p-4">
+          <AlertTriangle className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-rose-400">
+              {signalAlerts.exitSignals.length} Position{signalAlerts.exitSignals.length > 1 ? 's' : ''} — APEX Says EXIT
+            </p>
+            <p className="text-sm text-rose-300/80 mt-1">
+              {signalAlerts.exitSignals.map(p => p.ticker).join(', ')} entered as BUY but APEX now recommends SELL. 
+              Consider closing to align with the signal.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* P1: Minor Signal Change Alert */}
+      {signalAlerts.signalChanges.length > 0 && signalAlerts.exitSignals.length === 0 && (
+        <div className="flex items-start gap-3 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
+          <Zap className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-400">Signal Changes Detected</p>
+            <p className="text-sm text-amber-300/80 mt-1">
+              {signalAlerts.signalChanges.length} position{signalAlerts.signalChanges.length > 1 ? 's have' : ' has'} changed 
+              since entry. Review the APEX Signal column below.
+            </p>
+          </div>
+        </div>
+      )}
+
       {portfolio && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-          <StatCard
+          <PortfolioStatCard
             label="Total Value"
             value={formatCurrency(portfolio.total_value)}
             icon={Wallet}
             change={portfolio.total_return_pct || 0}
           />
-          <StatCard
+          <PortfolioStatCard
             label="Positions Value"
             value={formatCurrency(positionsSummary.totalValue)}
             icon={Briefcase}
             subtext={`${positions.length} position${positions.length !== 1 ? 's' : ''}`}
           />
-          <StatCard
+          <PortfolioStatCard
             label="Cash Balance"
             value={formatCurrency(portfolio.cash_balance)}
             icon={DollarSign}
           />
-          <StatCard
+          <PortfolioStatCard
             label="Win Rate"
             value={`${(portfolio.win_rate || 0).toFixed(1)}%`}
             subtext={`${portfolio.winning_trades}/${portfolio.total_trades} trades`}
             icon={Award}
           />
-          <StatCard
+          <PortfolioStatCard
             label="vs S&P 500"
             value={formatPct(portfolio.benchmark_return_pct || 0)}
             icon={Target}
@@ -194,9 +239,36 @@ export function PaperTradingDashboard() {
         </div>
       )}
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-lg font-semibold text-zinc-100">Quick Trade</h3>
-        <div className="flex flex-wrap gap-3">
+      <div className={cn(
+        "rounded-xl border bg-zinc-900/50 p-5",
+        isLinkedTrade ? "border-emerald-500/30" : "border-zinc-800"
+      )}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100">
+              {isLinkedTrade ? 'APEX-Linked Trade' : 'Quick Trade'}
+            </h3>
+            {isLinkedTrade ? (
+              <p className="text-xs text-emerald-400 mt-0.5 flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                Linked to APEX prediction • Entry signal: {aiDirection}
+              </p>
+            ) : (
+              <p className="text-xs text-zinc-500 mt-0.5">
+                For validation accuracy, use "Trade This" from Predictions page
+              </p>
+            )}
+          </div>
+          <button
+            onClick={handleReset}
+            disabled={actionLoading === 'reset'}
+            className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800"
+          >
+            {actionLoading === 'reset' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+            Reset
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
           <input
             type="text"
             placeholder="Ticker (e.g. AAPL)"
@@ -215,19 +287,22 @@ export function PaperTradingDashboard() {
           <button
             onClick={handleBuy}
             disabled={!buyTicker || !buyShares || actionLoading === 'buy'}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed",
+              isLinkedTrade 
+                ? "bg-emerald-600 hover:bg-emerald-500" 
+                : "bg-zinc-600 hover:bg-zinc-500"
+            )}
           >
             {actionLoading === 'buy' ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-            Buy
+            {isLinkedTrade ? 'Execute Trade' : 'Manual Buy'}
           </button>
-          <button
-            onClick={handleReset}
-            disabled={actionLoading === 'reset'}
-            className="ml-auto flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
-          >
-            {actionLoading === 'reset' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-            Reset
-          </button>
+          {!isLinkedTrade && buyTicker && buyShares && (
+            <span className="text-xs text-amber-400 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Manual trades won't be tracked for APEX validation
+            </span>
+          )}
         </div>
       </div>
 
@@ -277,14 +352,26 @@ export function PaperTradingDashboard() {
                       {formatCurrency(p.unrealized_pnl)} ({formatPct(p.unrealized_pnl_pct)})
                     </td>
                     <td className="py-3 text-right">
-                      <button
-                        onClick={() => handleSell(p.id)}
-                        disabled={actionLoading === p.id}
-                        className="flex items-center gap-1 rounded bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50"
-                      >
-                        {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3 w-3" />}
-                        Sell
-                      </button>
+                      {/* P3: Highlight exit when APEX says SELL */}
+                      {p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY' ? (
+                        <button
+                          onClick={() => handleSell(p.id)}
+                          disabled={actionLoading === p.id}
+                          className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50 animate-pulse"
+                        >
+                          {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                          Exit Now
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSell(p.id)}
+                          disabled={actionLoading === p.id}
+                          className="flex items-center gap-1 rounded bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50"
+                        >
+                          {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3 w-3" />}
+                          Sell
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -317,129 +404,63 @@ export function PaperTradingDashboard() {
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400">
                   <th className="pb-3 text-left font-medium">Ticker</th>
+                  <th className="pb-3 text-center font-medium">Entry Signal</th>
                   <th className="pb-3 text-right font-medium">Shares</th>
                   <th className="pb-3 text-right font-medium">Entry</th>
                   <th className="pb-3 text-right font-medium">Exit</th>
                   <th className="pb-3 text-right font-medium">P&L</th>
-                  <th className="pb-3 text-right font-medium">Date</th>
+                  <th className="pb-3 text-right font-medium">Outcome</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map(t => (
-                  <tr key={t.id} className="border-b border-zinc-800/50">
-                    <td className="py-3 font-semibold text-zinc-100">{t.ticker}</td>
-                    <td className="py-3 text-right text-zinc-300">{t.shares}</td>
-                    <td className="py-3 text-right text-zinc-400">${t.entry_price.toFixed(2)}</td>
-                    <td className="py-3 text-right text-zinc-300">${t.exit_price?.toFixed(2) || '-'}</td>
-                    <td className={cn('py-3 text-right font-medium', (t.realized_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                      {formatCurrency(t.realized_pnl || 0)} ({formatPct(t.realized_pnl_pct || 0)})
-                    </td>
-                    <td className="py-3 text-right text-zinc-500">
-                      {t.exit_timestamp ? new Date(t.exit_timestamp).toLocaleDateString() : '-'}
-                    </td>
-                  </tr>
-                ))}
+                {history.map(t => {
+                  const pnl = t.realized_pnl || 0
+                  const entrySignal = t.ai_direction
+                  const wasAligned = entrySignal === 'BUY' && pnl > 0
+                  return (
+                    <tr key={t.id} className="border-b border-zinc-800/50">
+                      <td className="py-3 font-semibold text-zinc-100">{t.ticker}</td>
+                      <td className="py-3 text-center">
+                        {entrySignal ? (
+                          <span className={cn(
+                            'px-2 py-0.5 rounded text-xs font-bold',
+                            entrySignal === 'BUY' && 'bg-emerald-500/20 text-emerald-400',
+                            entrySignal === 'HOLD' && 'bg-amber-500/20 text-amber-400',
+                            entrySignal === 'SELL' && 'bg-rose-500/20 text-rose-400'
+                          )}>
+                            {entrySignal}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-zinc-600">Manual</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-right text-zinc-300">{t.shares}</td>
+                      <td className="py-3 text-right text-zinc-400">${t.entry_price.toFixed(2)}</td>
+                      <td className="py-3 text-right text-zinc-300">${t.exit_price?.toFixed(2) || '-'}</td>
+                      <td className={cn('py-3 text-right font-medium', pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                        {formatCurrency(pnl)} ({formatPct(t.realized_pnl_pct || 0)})
+                      </td>
+                      <td className="py-3 text-right">
+                        {entrySignal ? (
+                          wasAligned ? (
+                            <span className="text-xs text-emerald-400">✓ APEX Correct</span>
+                          ) : pnl < 0 && entrySignal === 'BUY' ? (
+                            <span className="text-xs text-rose-400">✗ APEX Wrong</span>
+                          ) : (
+                            <span className="text-xs text-zinc-500">—</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-zinc-600">Untracked</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function StatCard({ label, value, icon: Icon, change, subtext, highlight }: {
-  label: string
-  value: string
-  icon: typeof Wallet
-  change?: number
-  subtext?: string
-  highlight?: boolean
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-400">{label}</span>
-        <Icon className={cn('h-5 w-5', highlight ? 'text-emerald-400' : 'text-zinc-500')} />
-      </div>
-      <p className="mt-2 text-2xl font-bold text-zinc-100">{value}</p>
-      {change !== undefined && (
-        <p className={cn('mt-1 text-sm font-medium', change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-          {change >= 0 ? '+' : ''}{change.toFixed(2)}% return
-        </p>
-      )}
-      {subtext && <p className="mt-1 text-sm text-zinc-500">{subtext}</p>}
-    </div>
-  )
-}
-
-function ApexSignalBadge({ signal }: { signal: ApexSignal }) {
-  const { currentRecommendation, currentScore, signalChanged, entrySignal } = signal
-
-  if (!currentRecommendation) {
-    return (
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="text-[10px] text-zinc-600 uppercase">No Signal</span>
-        <span className="text-xs text-zinc-500">Not in APEX</span>
-      </div>
-    )
-  }
-
-  const recColor = {
-    BUY: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    HOLD: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    SELL: 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-  }[currentRecommendation]
-
-  // Determine if this is a problematic signal change (entered BUY, now SELL or vice versa)
-  const isMajorChange = signalChanged && (
-    (entrySignal === 'BUY' && currentRecommendation === 'SELL') ||
-    (entrySignal === 'SELL' && currentRecommendation === 'BUY')
-  )
-
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex items-center gap-1.5">
-        <span className={cn(
-          'px-2 py-0.5 rounded text-xs font-bold border',
-          recColor
-        )}>
-          {currentRecommendation}
-        </span>
-        {currentScore !== null && (
-          <span className="text-xs text-zinc-500">{currentScore}</span>
-        )}
-      </div>
-      
-      {signalChanged && (
-        <div className={cn(
-          'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
-          isMajorChange 
-            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-        )}>
-          {isMajorChange ? (
-            <AlertTriangle className="h-2.5 w-2.5" />
-          ) : (
-            <Zap className="h-2.5 w-2.5" />
-          )}
-          <span>
-            {entrySignal} → {currentRecommendation}
-          </span>
-        </div>
-      )}
-      
-      {!signalChanged && entrySignal && (
-        <span className="text-[10px] text-zinc-600">
-          Entry: {entrySignal}
-        </span>
-      )}
-      
-      {!entrySignal && (
-        <span className="text-[10px] text-zinc-600">
-          Manual trade
-        </span>
-      )}
     </div>
   )
 }
