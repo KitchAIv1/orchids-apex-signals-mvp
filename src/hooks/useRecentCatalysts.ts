@@ -36,7 +36,18 @@ export function useRecentCatalysts(hoursBack: number = 24): UseRecentCatalystsRe
 
       const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
 
-      const { data, error: fetchError } = await supabase
+      type CatalystRow = {
+        id: string
+        event_type: string
+        urgency: string
+        description: string | null
+        detected_at: string
+        triggered_reanalysis: boolean | null
+        impact_on_score: number | null
+        stocks: { ticker: string; company_name: string | null }
+      }
+
+      const { data: catalystRows, error: fetchError } = await supabase
         .from('catalyst_events')
         .select(`
           id,
@@ -54,12 +65,11 @@ export function useRecentCatalysts(hoursBack: number = 24): UseRecentCatalystsRe
 
       if (fetchError) throw fetchError
 
-      const mapped: RecentCatalyst[] = (data || []).map((row) => {
-        const stockData = row.stocks as unknown as { ticker: string; company_name: string | null }
+      const mapped: RecentCatalyst[] = ((catalystRows || []) as CatalystRow[]).map((row) => {
         return {
           id: row.id,
-          ticker: stockData.ticker,
-          companyName: stockData.company_name,
+          ticker: row.stocks.ticker,
+          companyName: row.stocks.company_name,
           eventType: row.event_type,
           urgency: row.urgency as RecentCatalyst['urgency'],
           description: row.description,
@@ -88,34 +98,5 @@ export function useRecentCatalysts(hoursBack: number = 24): UseRecentCatalystsRe
   return { catalysts, loading, error, lastUpdated, refetch: fetchCatalysts }
 }
 
-export function getEventTypeLabel(eventType: string): string {
-  const labels: Record<string, string> = {
-    earnings_beat: 'Earnings Beat',
-    earnings_miss: 'Earnings Miss',
-    fda_approval: 'FDA Approval',
-    fda_rejection: 'FDA Rejection',
-    contract_win: 'Contract Win',
-    contract_loss: 'Contract Loss',
-    analyst_upgrade: 'Analyst Upgrade',
-    analyst_downgrade: 'Analyst Downgrade',
-    insider_buying: 'Insider Buying',
-    insider_selling: 'Insider Selling',
-    price_spike_up: 'Price Surge',
-    price_spike_down: 'Price Drop',
-    general_positive_news: 'Positive News',
-    general_negative_news: 'Negative News',
-    leadership_change: 'Leadership Change',
-    AI_ANALYSIS: 'AI Analysis'
-  }
-  return labels[eventType] || eventType.replace(/_/g, ' ')
-}
-
-export function getUrgencyColor(urgency: string): string {
-  switch (urgency) {
-    case 'CRITICAL': return 'text-rose-400 bg-rose-500/15 border-rose-500/30'
-    case 'HIGH': return 'text-amber-400 bg-amber-500/15 border-amber-500/30'
-    case 'MEDIUM': return 'text-sky-400 bg-sky-500/15 border-sky-500/30'
-    default: return 'text-zinc-400 bg-zinc-500/15 border-zinc-500/30'
-  }
-}
-
+// Re-export formatters for convenience (consumers can also import from utils directly)
+export { getEventTypeLabel, getUrgencyColor } from '@/utils/catalystFormatters'

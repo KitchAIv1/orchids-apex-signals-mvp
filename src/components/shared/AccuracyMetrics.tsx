@@ -1,140 +1,13 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import type { Prediction, CheckpointEvaluation } from '@/types/database'
-import { TrendingUp, TrendingDown, Target, Activity, BarChart3, Percent, Clock } from 'lucide-react'
+import type { Prediction } from '@/types/database'
+import { TrendingUp, TrendingDown, Target, Activity, BarChart3, Percent } from 'lucide-react'
+import { CircularProgress } from './CircularProgress'
+import { CheckpointCard, calculateCheckpointMetrics, getAccuracyColor } from './CheckpointCard'
 
 type Props = {
   predictions: Prediction[]
-}
-
-type CheckpointType = '5d' | '10d' | '20d'
-
-type CheckpointMetrics = {
-  type: CheckpointType
-  label: string
-  evaluated: number
-  correct: number
-  accuracy: number
-  avgReturn: number
-  isPrimary: boolean
-}
-
-function CircularProgress({ value, size = 48, strokeWidth = 4, color }: { 
-  value: number; 
-  size?: number; 
-  strokeWidth?: number;
-  color: string;
-}) {
-  const radius = (size - strokeWidth) / 2
-  const circumference = radius * 2 * Math.PI
-  const offset = circumference - (value / 100) * circumference
-
-  return (
-    <svg width={size} height={size} className="transform -rotate-90">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        className="text-zinc-800"
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        className={cn('transition-all duration-700 ease-out', color)}
-      />
-    </svg>
-  )
-}
-
-function calculateCheckpointMetrics(
-  predictions: Prediction[],
-  checkpointType: CheckpointType,
-  label: string,
-  isPrimary: boolean
-): CheckpointMetrics {
-  const fieldName = `evaluation_${checkpointType}` as keyof Prediction
-  const evaluatedPredictions = predictions.filter(
-    p => p[fieldName] !== null && p[fieldName] !== undefined
-  )
-  const evaluated = evaluatedPredictions.length
-  const correct = evaluatedPredictions.filter(p => {
-    const evaluation = p[fieldName] as CheckpointEvaluation
-    return evaluation?.directionalAccuracy
-  }).length
-  const accuracy = evaluated > 0 ? (correct / evaluated) * 100 : 0
-  const totalReturn = evaluatedPredictions.reduce((sum, p) => {
-    const evaluation = p[fieldName] as CheckpointEvaluation
-    return sum + (evaluation?.returnPct ?? 0)
-  }, 0)
-  const avgReturn = evaluated > 0 ? totalReturn / evaluated : 0
-
-  return { type: checkpointType, label, evaluated, correct, accuracy, avgReturn, isPrimary }
-}
-
-function CheckpointCard({ metrics }: { metrics: CheckpointMetrics }) {
-  const accuracyColor = metrics.accuracy >= 55 
-    ? 'text-emerald-400' 
-    : metrics.accuracy >= 45 
-    ? 'text-amber-400' 
-    : 'text-rose-400'
-
-  return (
-    <div className={cn(
-      'rounded-xl border bg-zinc-900/50 p-4',
-      metrics.isPrimary ? 'border-violet-500/30 bg-violet-500/5' : 'border-zinc-800'
-    )}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-zinc-500" />
-          <span className="text-sm font-medium text-zinc-300">{metrics.label}</span>
-          {metrics.isPrimary && (
-            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-violet-500/20 text-violet-400 rounded">
-              PRIMARY
-            </span>
-          )}
-        </div>
-        <span className="text-xs text-zinc-500">{metrics.evaluated} evaluated</span>
-      </div>
-      
-      <div className="flex items-center gap-4">
-        <div className="relative flex items-center justify-center">
-          <CircularProgress 
-            value={metrics.accuracy} 
-            size={44} 
-            strokeWidth={3}
-            color={accuracyColor}
-          />
-          <Target className={cn('absolute h-4 w-4', accuracyColor)} />
-        </div>
-        <div className="flex-1">
-          <p className={cn('text-xl font-bold tabular-nums', accuracyColor)}>
-            {metrics.accuracy.toFixed(1)}%
-          </p>
-          <p className="text-xs text-zinc-500">accuracy</p>
-        </div>
-        <div className="text-right">
-          <p className={cn(
-            'text-lg font-semibold tabular-nums',
-            metrics.avgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'
-          )}>
-            {metrics.avgReturn >= 0 ? '+' : ''}{metrics.avgReturn.toFixed(2)}%
-          </p>
-          <p className="text-xs text-zinc-500">avg return</p>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export function AccuracyMetrics({ predictions }: Props) {
@@ -145,6 +18,7 @@ export function AccuracyMetrics({ predictions }: Props) {
   ]
 
   const primaryMetrics = checkpointMetrics.find(m => m.isPrimary)!
+  const primaryAccuracyColor = getAccuracyColor(primaryMetrics.accuracy)
   
   const buyPredictions = predictions.filter(p => p.recommendation === 'BUY')
   const holdPredictions = predictions.filter(p => p.recommendation === 'HOLD')
@@ -152,6 +26,7 @@ export function AccuracyMetrics({ predictions }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Summary Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           <div className="flex items-center gap-3">
@@ -184,19 +59,13 @@ export function AccuracyMetrics({ predictions }: Props) {
                 value={primaryMetrics.accuracy} 
                 size={44} 
                 strokeWidth={3}
-                color={primaryMetrics.accuracy >= 55 ? 'text-emerald-400' : primaryMetrics.accuracy >= 45 ? 'text-amber-400' : 'text-rose-400'}
+                color={primaryAccuracyColor}
               />
-              <Percent className={cn(
-                'absolute h-4 w-4',
-                primaryMetrics.accuracy >= 55 ? 'text-emerald-400' : primaryMetrics.accuracy >= 45 ? 'text-amber-400' : 'text-rose-400'
-              )} />
+              <Percent className={cn('absolute h-4 w-4', primaryAccuracyColor)} />
             </div>
             <div>
               <p className="text-xs text-zinc-500">10d Accuracy</p>
-              <p className={cn(
-                'text-2xl font-bold tabular-nums',
-                primaryMetrics.accuracy >= 55 ? 'text-emerald-400' : primaryMetrics.accuracy >= 45 ? 'text-amber-400' : 'text-rose-400'
-              )}>
+              <p className={cn('text-2xl font-bold tabular-nums', primaryAccuracyColor)}>
                 {primaryMetrics.accuracy.toFixed(1)}%
               </p>
             </div>
@@ -224,13 +93,16 @@ export function AccuracyMetrics({ predictions }: Props) {
         </div>
       </div>
 
+      {/* Checkpoint Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {checkpointMetrics.map(metrics => (
           <CheckpointCard key={metrics.type} metrics={metrics} />
         ))}
       </div>
 
+      {/* Distribution & Completion */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Signal Distribution */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="h-4 w-4 text-zinc-500" />
@@ -278,6 +150,7 @@ export function AccuracyMetrics({ predictions }: Props) {
           </div>
         </div>
 
+        {/* Checkpoint Completion */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           <div className="flex items-center gap-2 mb-4">
             <Target className="h-4 w-4 text-zinc-500" />

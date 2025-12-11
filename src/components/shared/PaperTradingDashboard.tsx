@@ -2,23 +2,17 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { cn } from '@/lib/utils'
 import { 
-  Wallet, TrendingUp, TrendingDown, DollarSign, 
-  RotateCcw, Loader2, AlertCircle, Target, Award, Briefcase,
+  Wallet, DollarSign, Loader2, AlertCircle, Target, Award, Briefcase,
   AlertTriangle, Zap
 } from 'lucide-react'
 import type { PaperPortfolio, PaperTrade } from '@/types/database'
 import type { ApexSignal } from '@/services/PaperTradingService'
-import { ApexSignalBadge } from './ApexSignalBadge'
 import { PortfolioStatCard } from './PortfolioStatCard'
+import { QuickTradeForm } from './QuickTradeForm'
+import { OpenPositionsTable, type Position } from './OpenPositionsTable'
+import { TradeHistoryTable } from './TradeHistoryTable'
 
-type Position = PaperTrade & { 
-  current_price: number
-  unrealized_pnl: number
-  unrealized_pnl_pct: number
-  apex_signal: ApexSignal
-}
 type PortfolioWithValue = PaperPortfolio & { positions_value: number; open_positions: number }
 
 export function PaperTradingDashboard() {
@@ -43,17 +37,14 @@ export function PaperTradingDashboard() {
     return { totalValue, totalCost, totalPnl, totalPnlPct }
   }, [positions])
 
-  // P1: Detect positions with signal changes (especially exit signals)
   const signalAlerts = useMemo(() => {
     const exitSignals = positions.filter(p => 
       p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
     )
     const signalChanges = positions.filter(p => p.apex_signal.signalChanged)
-    const manualTrades = positions.filter(p => !p.apex_signal.entrySignal)
-    return { exitSignals, signalChanges, manualTrades }
+    return { exitSignals, signalChanges }
   }, [positions])
 
-  // P2: Check if this is a linked trade from predictions
   const isLinkedTrade = Boolean(predictionId && aiDirection)
 
   useEffect(() => {
@@ -71,11 +62,11 @@ export function PaperTradingDashboard() {
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/paper-trading')
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setPortfolio(data.portfolio)
-      setPositions(data.positions)
-      setHistory(data.history)
+      const responseData = await res.json()
+      if (responseData.error) throw new Error(responseData.error)
+      setPortfolio(responseData.portfolio)
+      setPositions(responseData.positions)
+      setHistory(responseData.history)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -102,8 +93,8 @@ export function PaperTradingDashboard() {
           aiDirection
         })
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const responseData = await res.json()
+      if (responseData.error) throw new Error(responseData.error)
       setBuyTicker('')
       setBuyShares('')
       setPredictionId(null)
@@ -125,8 +116,8 @@ export function PaperTradingDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sell', tradeId })
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const responseData = await res.json()
+      if (responseData.error) throw new Error(responseData.error)
       fetchData()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sell failed')
@@ -144,8 +135,8 @@ export function PaperTradingDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reset' })
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const responseData = await res.json()
+      if (responseData.error) throw new Error(responseData.error)
       fetchData()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reset failed')
@@ -175,7 +166,6 @@ export function PaperTradingDashboard() {
         </div>
       )}
 
-      {/* P1: Exit Signal Alert Banner */}
       {signalAlerts.exitSignals.length > 0 && (
         <div className="flex items-start gap-3 rounded-lg bg-rose-500/10 border border-rose-500/30 p-4">
           <AlertTriangle className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5" />
@@ -191,7 +181,6 @@ export function PaperTradingDashboard() {
         </div>
       )}
 
-      {/* P1: Minor Signal Change Alert */}
       {signalAlerts.signalChanges.length > 0 && signalAlerts.exitSignals.length === 0 && (
         <div className="flex items-start gap-3 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
           <Zap className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -239,228 +228,32 @@ export function PaperTradingDashboard() {
         </div>
       )}
 
-      <div className={cn(
-        "rounded-xl border bg-zinc-900/50 p-5",
-        isLinkedTrade ? "border-emerald-500/30" : "border-zinc-800"
-      )}>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-100">
-              {isLinkedTrade ? 'APEX-Linked Trade' : 'Quick Trade'}
-            </h3>
-            {isLinkedTrade ? (
-              <p className="text-xs text-emerald-400 mt-0.5 flex items-center gap-1">
-                <Zap className="h-3 w-3" />
-                Linked to APEX prediction • Entry signal: {aiDirection}
-              </p>
-            ) : (
-              <p className="text-xs text-zinc-500 mt-0.5">
-                For validation accuracy, use "Trade This" from Predictions page
-              </p>
-            )}
-          </div>
-          <button
-            onClick={handleReset}
-            disabled={actionLoading === 'reset'}
-            className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800"
-          >
-            {actionLoading === 'reset' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-            Reset
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-3 items-center">
-          <input
-            type="text"
-            placeholder="Ticker (e.g. AAPL)"
-            value={buyTicker}
-            onChange={e => setBuyTicker(e.target.value.toUpperCase())}
-            className="w-36 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500 focus:outline-none"
-          />
-          <input
-            type="number"
-            placeholder="Shares"
-            value={buyShares}
-            onChange={e => setBuyShares(e.target.value)}
-            min="1"
-            className="w-28 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500 focus:outline-none"
-          />
-          <button
-            onClick={handleBuy}
-            disabled={!buyTicker || !buyShares || actionLoading === 'buy'}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed",
-              isLinkedTrade 
-                ? "bg-emerald-600 hover:bg-emerald-500" 
-                : "bg-zinc-600 hover:bg-zinc-500"
-            )}
-          >
-            {actionLoading === 'buy' ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-            {isLinkedTrade ? 'Execute Trade' : 'Manual Buy'}
-          </button>
-          {!isLinkedTrade && buyTicker && buyShares && (
-            <span className="text-xs text-amber-400 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              Manual trades won't be tracked for APEX validation
-            </span>
-          )}
-        </div>
-      </div>
+      <QuickTradeForm
+        buyTicker={buyTicker}
+        setBuyTicker={setBuyTicker}
+        buyShares={buyShares}
+        setBuyShares={setBuyShares}
+        isLinkedTrade={isLinkedTrade}
+        aiDirection={aiDirection}
+        actionLoading={actionLoading}
+        onBuy={handleBuy}
+        onReset={handleReset}
+      />
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-zinc-100">Open Positions ({positions.length})</h3>
-          {positions.length > 0 && (
-            <div className="text-right">
-              <span className="text-sm text-zinc-400">Total: </span>
-              <span className="text-lg font-bold text-zinc-100">{formatCurrency(positionsSummary.totalValue)}</span>
-              <span className={cn('ml-2 text-sm font-medium', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                ({formatPct(positionsSummary.totalPnlPct)})
-              </span>
-            </div>
-          )}
-        </div>
-        {positions.length === 0 ? (
-          <p className="text-zinc-500 py-8 text-center">No open positions. Buy a stock to get started!</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-400">
-                  <th className="pb-3 text-left font-medium">Ticker</th>
-                  <th className="pb-3 text-center font-medium">APEX Signal</th>
-                  <th className="pb-3 text-right font-medium">Shares</th>
-                  <th className="pb-3 text-right font-medium">Entry</th>
-                  <th className="pb-3 text-right font-medium">Current</th>
-                  <th className="pb-3 text-right font-medium">P&L</th>
-                  <th className="pb-3 text-right font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map(p => (
-                  <tr key={p.id} className={cn(
-                    "border-b border-zinc-800/50",
-                    p.apex_signal.signalChanged && "bg-amber-500/5"
-                  )}>
-                    <td className="py-3 font-semibold text-zinc-100">{p.ticker}</td>
-                    <td className="py-3">
-                      <ApexSignalBadge signal={p.apex_signal} />
-                    </td>
-                    <td className="py-3 text-right text-zinc-300">{p.shares}</td>
-                    <td className="py-3 text-right text-zinc-400">${p.entry_price.toFixed(2)}</td>
-                    <td className="py-3 text-right text-zinc-300">${p.current_price.toFixed(2)}</td>
-                    <td className={cn('py-3 text-right font-medium', p.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                      {formatCurrency(p.unrealized_pnl)} ({formatPct(p.unrealized_pnl_pct)})
-                    </td>
-                    <td className="py-3 text-right">
-                      {/* P3: Highlight exit when APEX says SELL */}
-                      {p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY' ? (
-                        <button
-                          onClick={() => handleSell(p.id)}
-                          disabled={actionLoading === p.id}
-                          className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50 animate-pulse"
-                        >
-                          {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
-                          Exit Now
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleSell(p.id)}
-                          disabled={actionLoading === p.id}
-                          className="flex items-center gap-1 rounded bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50"
-                        >
-                          {actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3 w-3" />}
-                          Sell
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-zinc-700 bg-zinc-800/30">
-                  <td className="py-3 font-bold text-zinc-100">TOTAL</td>
-                  <td className="py-3"></td>
-                  <td className="py-3 text-right text-zinc-300">—</td>
-                  <td className="py-3 text-right text-zinc-400">{formatCurrency(positionsSummary.totalCost)}</td>
-                  <td className="py-3 text-right text-zinc-300">—</td>
-                  <td className={cn('py-3 text-right font-bold', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                    {formatCurrency(positionsSummary.totalPnl)} ({formatPct(positionsSummary.totalPnlPct)})
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
+      <OpenPositionsTable
+        positions={positions}
+        positionsSummary={positionsSummary}
+        actionLoading={actionLoading}
+        onSell={handleSell}
+        formatCurrency={formatCurrency}
+        formatPct={formatPct}
+      />
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <h3 className="mb-4 text-lg font-semibold text-zinc-100">Trade History</h3>
-        {history.length === 0 ? (
-          <p className="text-zinc-500 py-8 text-center">No completed trades yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-400">
-                  <th className="pb-3 text-left font-medium">Ticker</th>
-                  <th className="pb-3 text-center font-medium">Entry Signal</th>
-                  <th className="pb-3 text-right font-medium">Shares</th>
-                  <th className="pb-3 text-right font-medium">Entry</th>
-                  <th className="pb-3 text-right font-medium">Exit</th>
-                  <th className="pb-3 text-right font-medium">P&L</th>
-                  <th className="pb-3 text-right font-medium">Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(t => {
-                  const pnl = t.realized_pnl || 0
-                  const entrySignal = t.ai_direction
-                  const wasAligned = entrySignal === 'BUY' && pnl > 0
-                  return (
-                    <tr key={t.id} className="border-b border-zinc-800/50">
-                      <td className="py-3 font-semibold text-zinc-100">{t.ticker}</td>
-                      <td className="py-3 text-center">
-                        {entrySignal ? (
-                          <span className={cn(
-                            'px-2 py-0.5 rounded text-xs font-bold',
-                            entrySignal === 'BUY' && 'bg-emerald-500/20 text-emerald-400',
-                            entrySignal === 'HOLD' && 'bg-amber-500/20 text-amber-400',
-                            entrySignal === 'SELL' && 'bg-rose-500/20 text-rose-400'
-                          )}>
-                            {entrySignal}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-zinc-600">Manual</span>
-                        )}
-                      </td>
-                      <td className="py-3 text-right text-zinc-300">{t.shares}</td>
-                      <td className="py-3 text-right text-zinc-400">${t.entry_price.toFixed(2)}</td>
-                      <td className="py-3 text-right text-zinc-300">${t.exit_price?.toFixed(2) || '-'}</td>
-                      <td className={cn('py-3 text-right font-medium', pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                        {formatCurrency(pnl)} ({formatPct(t.realized_pnl_pct || 0)})
-                      </td>
-                      <td className="py-3 text-right">
-                        {entrySignal ? (
-                          wasAligned ? (
-                            <span className="text-xs text-emerald-400">✓ APEX Correct</span>
-                          ) : pnl < 0 && entrySignal === 'BUY' ? (
-                            <span className="text-xs text-rose-400">✗ APEX Wrong</span>
-                          ) : (
-                            <span className="text-xs text-zinc-500">—</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-zinc-600">Untracked</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <TradeHistoryTable
+        history={history}
+        formatCurrency={formatCurrency}
+        formatPct={formatPct}
+      />
     </div>
   )
 }
