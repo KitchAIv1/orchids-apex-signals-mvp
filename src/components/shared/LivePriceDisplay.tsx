@@ -8,7 +8,8 @@ type Props = {
   price: StockPrice
 }
 
-function formatPriceValue(priceValue: number): string {
+function formatPriceValue(priceValue: number | null | undefined): string {
+  if (priceValue == null) return '--'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -17,14 +18,16 @@ function formatPriceValue(priceValue: number): string {
   }).format(priceValue)
 }
 
-function formatPricePercent(percent: number): string {
+function formatPricePercent(percent: number | null | undefined): string {
+  if (percent == null) return '--%'
   const sign = percent >= 0 ? '+' : ''
   return `${sign}${percent.toFixed(2)}%`
 }
 
 export function LivePriceDisplay({ price }: Props) {
-  const isPositive = price.change >= 0
-  const isNegative = price.change < 0
+  const change = price.change ?? 0
+  const isPositive = change >= 0
+  const isNegative = change < 0
 
   return (
     <div className="flex items-center gap-3">
