@@ -16,7 +16,8 @@ type Props = {
   catalystUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 }
 
-function formatPrice(price: number): string {
+function formatPrice(price: number | null | undefined): string {
+  if (price == null) return '--'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -25,7 +26,8 @@ function formatPrice(price: number): string {
   }).format(price)
 }
 
-function formatPercent(percent: number): string {
+function formatPercent(percent: number | null | undefined): string {
+  if (percent == null) return '--%'
   const sign = percent >= 0 ? '+' : ''
   return `${sign}${percent.toFixed(2)}%`
 }
@@ -44,8 +46,9 @@ export function StockCard({ stock, price, hasRecentCatalyst, catalystUrgency }: 
     ? AgentService.identifyConsensusLevel(agentScores) 
     : null
 
-  const isPositive = price && price.change >= 0
-  const isNegative = price && price.change < 0
+  const change = price?.change ?? 0
+  const isPositive = price && change >= 0
+  const isNegative = price && change < 0
 
   return (
     <Link href={`/stock/${ticker}`}>
