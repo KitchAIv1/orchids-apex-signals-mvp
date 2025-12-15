@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { formatDate, formatPercent, getRecommendationColor } from '@/utils/formatters'
-import { Clock, PlayCircle, Loader2, ChevronRight, TrendingUp } from 'lucide-react'
+import { formatDate, formatDistanceToNow, getRecommendationColor } from '@/utils/formatters'
+import { Clock, PlayCircle, Loader2, ChevronRight, TrendingUp, RefreshCw } from 'lucide-react'
 import { CheckpointProgress } from './CheckpointProgress'
 import { ScoreRing } from './ScoreRing'
 import { ConfidenceBar } from './ConfidenceBar'
@@ -30,6 +30,18 @@ function calculateDaysElapsed(predictedAt: string): number {
   return Math.max(0, diff)
 }
 
+function getDayProgressDisplay(daysElapsed: number): { label: string; checkpoint: number; remaining: number } {
+  // Determine which checkpoint we're tracking toward
+  if (daysElapsed < 5) {
+    return { label: `Day ${daysElapsed}`, checkpoint: 5, remaining: 5 - daysElapsed }
+  } else if (daysElapsed < 10) {
+    return { label: `Day ${daysElapsed}`, checkpoint: 10, remaining: 10 - daysElapsed }
+  } else if (daysElapsed < 20) {
+    return { label: `Day ${daysElapsed}`, checkpoint: 20, remaining: 20 - daysElapsed }
+  }
+  return { label: `Day ${daysElapsed}`, checkpoint: 20, remaining: 0 }
+}
+
 function buildCheckpointDataList(prediction: Prediction, daysElapsed: number) {
   const checkpointTypes: CheckpointType[] = ['5d', '10d', '20d']
   return checkpointTypes.map(type => ({
@@ -52,9 +64,11 @@ export function PredictionCard({ prediction, showTicker = true, price, onEvaluat
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null)
 
   const daysElapsed = useMemo(() => calculateDaysElapsed(prediction.predicted_at), [prediction.predicted_at])
+  const dayProgress = useMemo(() => getDayProgressDisplay(daysElapsed), [daysElapsed])
   const checkpointDataList = useMemo(() => buildCheckpointDataList(prediction, daysElapsed), [prediction, daysElapsed])
   const readyCheckpoints = useMemo(() => getReadyCheckpoints(checkpointDataList), [checkpointDataList])
   const primaryEvaluation = prediction.evaluation_10d
+  const updatedTimeAgo = useMemo(() => formatDistanceToNow(prediction.predicted_at), [prediction.predicted_at])
 
   const handleEvaluateCheckpoints = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -127,9 +141,21 @@ export function PredictionCard({ prediction, showTicker = true, price, onEvaluat
             <CheckpointProgress checkpoints={checkpointDataList} compact />
           </div>
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            <p className="text-xs text-zinc-500 flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatDate(predicted_at)} • Day {daysElapsed}
+            <p className="text-xs text-zinc-500 flex items-center gap-1" title={`Analyzed: ${formatDate(predicted_at)}`}>
+              <RefreshCw className="h-3 w-3" />
+              Updated {updatedTimeAgo}
+            </p>
+            <span className="text-xs text-zinc-600">•</span>
+            <p className="text-xs flex items-center gap-1">
+              <Clock className="h-3 w-3 text-zinc-500" />
+              <span className="text-amber-400 font-medium">
+                {dayProgress.label} → {dayProgress.checkpoint}d
+              </span>
+              {dayProgress.remaining > 0 && (
+                <span className="text-zinc-600">
+                  ({dayProgress.remaining} to go)
+                </span>
+              )}
             </p>
             <ConfidenceBar confidence={confidence} />
           </div>
