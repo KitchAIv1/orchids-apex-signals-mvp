@@ -1,6 +1,7 @@
 'use client'
 
-import { Zap, RefreshCw, Clock, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
+import { Zap, RefreshCw, Clock, TrendingUp, TrendingDown, AlertTriangle, Radar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRecentCatalysts, getEventTypeLabel, getUrgencyColor } from '@/hooks/useRecentCatalysts'
 import { formatDistanceToNow } from '@/utils/formatters'
@@ -85,12 +86,49 @@ function CatalystItem({ catalyst }: { catalyst: ReturnType<typeof useRecentCatal
   )
 }
 
+type ScanResult = {
+  message: string
+  detection?: {
+    stocksScanned: number
+    catalystsDetected: number
+    catalystsInserted: number
+    errors: string[]
+  }
+  reanalyzed?: string[]
+}
+
 export function CatalystFeed() {
   const { catalysts, loading, lastUpdated, refetch } = useRecentCatalysts(48)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null)
 
   const highUrgencyCount = catalysts.filter(c => 
     c.urgency === 'HIGH' || c.urgency === 'CRITICAL'
   ).length
+
+  const handleScanForCatalysts = async () => {
+    setScanning(true)
+    setScanResult(null)
+    
+    try {
+      const response = await fetch('/api/cron/catalyst-monitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      const result = await response.json()
+      setScanResult(result)
+      
+      // Refresh the catalyst list after scan
+      setTimeout(() => refetch(), 1000)
+    } catch (error) {
+      setScanResult({ 
+        message: `Scan failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      })
+    } finally {
+      setScanning(false)
+    }
+  }
 
   return (
     <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 backdrop-blur-sm overflow-hidden">
@@ -110,21 +148,62 @@ export function CatalystFeed() {
           )}
         </div>
         
-        <div className="flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-[10px] text-zinc-600">
-              Updated {formatDistanceToNow(lastUpdated.toISOString())}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleScanForCatalysts}
+            disabled={scanning}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              scanning
+                ? 'bg-amber-500/20 text-amber-300 cursor-wait'
+                : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30'
+            )}
+            title="Scan all stocks for new catalysts"
+          >
+            <Radar className={cn('h-3.5 w-3.5', scanning && 'animate-pulse')} />
+            {scanning ? 'Scanning...' : 'Scan Now'}
+          </button>
           <button
             onClick={() => refetch()}
-            className="p-1 rounded hover:bg-zinc-800 transition-colors"
-            title="Refresh"
+            className="p-1.5 rounded hover:bg-zinc-800 transition-colors"
+            title="Refresh list"
           >
             <RefreshCw className={cn('h-3.5 w-3.5 text-zinc-500', loading && 'animate-spin')} />
           </button>
         </div>
       </div>
+
+      {/* Scan Result Banner */}
+      {scanResult && (
+        <div className={cn(
+          'px-4 py-2 text-xs border-b border-zinc-800/60',
+          scanResult.detection?.catalystsInserted 
+            ? 'bg-emerald-500/10 text-emerald-300' 
+            : 'bg-zinc-800/50 text-zinc-400'
+        )}>
+          <div className="flex items-center justify-between">
+            <span>{scanResult.message}</span>
+            <button 
+              onClick={() => setScanResult(null)}
+              className="text-zinc-500 hover:text-zinc-300"
+            >
+              ×
+            </button>
+          </div>
+          {scanResult.detection && (
+            <div className="flex gap-4 mt-1 text-[10px] text-zinc-500">
+              <span>Stocks: {scanResult.detection.stocksScanned}</span>
+              <span>Detected: {scanResult.detection.catalystsDetected}</span>
+              <span>New: {scanResult.detection.catalystsInserted}</span>
+              {scanResult.reanalyzed && scanResult.reanalyzed.length > 0 && (
+                <span className="text-emerald-400">
+                  Reanalyzed: {scanResult.reanalyzed.join(', ')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="divide-y divide-zinc-800/40 max-h-[400px] overflow-y-auto">
         {loading && catalysts.length === 0 ? (
@@ -149,7 +228,7 @@ export function CatalystFeed() {
 
       <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-900/80">
         <div className="flex items-center justify-between text-[10px] text-zinc-600">
-          <span>Catalyst Monitor: 4x daily (Mon-Fri)</span>
+          <span>Manual scan available • Auto: Weekly (Sundays)</span>
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
             Active

@@ -5,10 +5,11 @@ import {
   evaluateCatalystTrigger, 
   logCatalystWithSkip 
 } from '@/services/CatalystTriggerService'
+import { detectAllCatalysts } from '@/services/CatalystDetectionService'
 import type { CatalystEvent } from '@/types/database'
 
 export const runtime = 'nodejs'
-export const maxDuration = 120
+export const maxDuration = 300 // Increased for detection + processing
 
 type CatalystWithStock = CatalystEvent & {
   stocks: { id: string; ticker: string; is_active: boolean }
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // STEP 1: Detect new catalysts from news feeds
+    console.log('🔍 Starting catalyst detection...')
+    const detectionResult = await detectAllCatalysts()
+    console.log(`📰 Detection complete: ${detectionResult.catalystsInserted} new catalysts from ${detectionResult.stocksScanned} stocks`)
 
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
@@ -54,7 +60,13 @@ export async function POST(request: Request) {
 
     if (!recentCatalysts || recentCatalysts.length === 0) {
       return NextResponse.json({
-        message: 'No new catalysts to process',
+        message: 'Catalyst scan complete. No catalysts require processing.',
+        detection: {
+          stocksScanned: detectionResult.stocksScanned,
+          catalystsDetected: detectionResult.catalystsDetected,
+          catalystsInserted: detectionResult.catalystsInserted,
+          errors: detectionResult.errors
+        },
         processed: [],
         skipped: [],
         reanalyzed: []
@@ -141,7 +153,13 @@ export async function POST(request: Request) {
 
     const costSaved = results.skipped.length * 0.18
     return NextResponse.json({
-      message: `Catalyst monitoring completed. Reanalyzed ${results.reanalyzed.length}, skipped ${results.skipped.length} (saved ~$${costSaved.toFixed(2)})`,
+      message: `Catalyst scan complete. Detected ${detectionResult.catalystsInserted} new events. Reanalyzed ${results.reanalyzed.length}, skipped ${results.skipped.length} (saved ~$${costSaved.toFixed(2)})`,
+      detection: {
+        stocksScanned: detectionResult.stocksScanned,
+        catalystsDetected: detectionResult.catalystsDetected,
+        catalystsInserted: detectionResult.catalystsInserted,
+        errors: detectionResult.errors
+      },
       catalystsFound: recentCatalysts.length,
       processed: results.processed,
       reanalyzed: results.reanalyzed,
