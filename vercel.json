@@ -1,22 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/cron/catalyst-monitor",
-      "schedule": "0 11 * * 1-5"
-    },
-    {
-      "path": "/api/cron/catalyst-monitor",
-      "schedule": "0 15 * * 1-5"
-    },
-    {
-      "path": "/api/cron/catalyst-monitor",
-      "schedule": "30 21 * * 1-5"
-    },
-    {
-      "path": "/api/cron/catalyst-monitor",
-      "schedule": "0 3 * * 2-6"
-    },
-    {
       "path": "/api/cron/weekly-analysis",
       "schedule": "0 10 * * 0"
     },
