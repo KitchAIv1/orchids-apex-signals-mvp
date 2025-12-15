@@ -14,7 +14,7 @@ export default function PaperTradingPage() {
             Paper Trading
           </h1>
           <p className="text-zinc-400">
-            Practice trading with $100,000 virtual capital using real market prices
+            Practice trading with $200,000 virtual capital using real market prices
           </p>
         </div>
         
