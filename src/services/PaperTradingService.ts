@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type { PaperPortfolio, PaperTrade, Prediction } from '@/types/database'
 import { getStockQuote } from './YahooFinanceService'
 
-const INITIAL_BALANCE = 100000
+const INITIAL_BALANCE = 200000
 const DEMO_PORTFOLIO_ID = '00000000-0000-0000-0000-000000000001'
 
 // APEX signal status for advisory mode
