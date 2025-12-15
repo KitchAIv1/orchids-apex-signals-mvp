@@ -1,6 +1,7 @@
 import { Navbar } from '@/components/shared/Navbar'
 import { DisclaimerBanner } from '@/components/shared/DisclaimerBanner'
 import { PredictionHistory } from '@/components/shared/PredictionHistory'
+import { CatalystAlertBanner } from '@/components/shared/CatalystAlertBanner'
 
 export default function PredictionsPage() {
   return (
@@ -15,6 +16,9 @@ export default function PredictionsPage() {
             Track all AI predictions and their outcomes for complete transparency
           </p>
         </div>
+        
+        {/* Catalyst Alert Banner - Shows recent HIGH/CRITICAL events */}
+        <CatalystAlertBanner className="mb-6" />
         
         <PredictionHistory />
         

@@ -9,6 +9,7 @@ import { RiskFactorsList } from './RiskFactorsList'
 import { AgentDebateRoom } from '@/components/AgentDebate/AgentDebateRoom'
 import { ConflictSummary } from '@/components/AgentDebate/ConflictSummary'
 import { RecommendationJourney } from '@/components/shared/RecommendationJourney'
+import { RecentCatalystEvents } from '@/components/shared/RecentCatalystEvents'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { AgentService } from '@/services/AgentService'
@@ -94,6 +95,11 @@ export function StockDetailClient({ ticker }: Props) {
         ) : (
           <div className="space-y-8">
             <StockOverview analysis={analysis} />
+            
+            {/* Recent Catalyst Events - News and events that may affect this stock */}
+            {analysis.catalysts && analysis.catalysts.length > 0 && (
+              <RecentCatalystEvents catalysts={analysis.catalysts} maxItems={5} />
+            )}
             
             {/* Conflict Summary - Shows bull vs bear at a glance */}
             {analysis.agentScores.length > 0 && (
