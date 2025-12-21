@@ -6,10 +6,10 @@ import {
   getStockMarketData, 
   formatDataForAgent, 
   buildHistoryContext,
-  getStockQuote,
   type StockMarketData,
   type RecentHistoryContext 
 } from './MarketDataService'
+import { getStockQuote } from './YahooFinanceService'
 import { reconcileRecommendation, THRESHOLDS, type Recommendation } from './RecommendationEngine'
 
 type AgentAnalysisResult = {
