@@ -1,6 +1,7 @@
 'use client'
 
-import { Zap, ExternalLink, Clock, AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
+import { Zap, ExternalLink, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from '@/utils/formatters'
 import type { CatalystEvent } from '@/types/database'
@@ -132,15 +133,27 @@ function CatalystEventItem({ catalyst }: { catalyst: CatalystEvent }) {
 }
 
 export function RecentCatalystEvents({ catalysts, maxItems = 5 }: Props) {
-  const visibleCatalysts = catalysts.slice(0, maxItems)
+  const [isExpanded, setIsExpanded] = useState(false)
   
-  if (visibleCatalysts.length === 0) {
+  // Sort by detected_at descending to ensure newest events are shown first
+  const sortedCatalysts = [...catalysts].sort((a, b) => 
+    new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime()
+  )
+  
+  const visibleCatalysts = isExpanded 
+    ? sortedCatalysts 
+    : sortedCatalysts.slice(0, maxItems)
+  
+  if (sortedCatalysts.length === 0) {
     return null
   }
 
-  const criticalCount = catalysts.filter(c => 
+  const criticalCount = sortedCatalysts.filter(c => 
     c.urgency === 'CRITICAL' || c.urgency === 'HIGH'
   ).length
+  
+  const hiddenCount = sortedCatalysts.length - maxItems
+  const hasMoreEvents = hiddenCount > 0
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
@@ -155,7 +168,7 @@ export function RecentCatalystEvents({ catalysts, maxItems = 5 }: Props) {
           )}
         </h3>
         <span className="text-[10px] text-zinc-500">
-          Last {catalysts.length} events
+          {isExpanded ? `All ${sortedCatalysts.length} events` : `Showing ${visibleCatalysts.length} of ${sortedCatalysts.length}`}
         </span>
       </div>
       
@@ -165,12 +178,29 @@ export function RecentCatalystEvents({ catalysts, maxItems = 5 }: Props) {
         ))}
       </div>
       
-      {catalysts.length > maxItems && (
-        <p className="text-[10px] text-zinc-500 mt-2 text-center">
-          +{catalysts.length - maxItems} more events
-        </p>
+      {hasMoreEvents && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={cn(
+            'w-full mt-3 py-2 px-3 rounded-lg text-xs font-medium',
+            'flex items-center justify-center gap-1.5',
+            'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300',
+            'border border-zinc-700/50 transition-colors'
+          )}
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5" />
+              Show {hiddenCount} More Events
+            </>
+          )}
+        </button>
       )}
     </div>
   )
 }
-
