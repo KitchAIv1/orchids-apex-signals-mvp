@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { EvaluationService, CHECKPOINT_CONFIGS } from '@/services/EvaluationService'
+import { isCheckpointReady } from '@/utils/checkpointCalculations'
 import type { Prediction, Stock } from '@/types/database'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -208,12 +209,11 @@ export async function GET() {
     ready20d: 0
   }
 
-  const now = new Date()
+  // Use shared utility for consistent "ready" determination
   predictions?.forEach(p => {
-    const daysElapsed = Math.floor((now.getTime() - new Date(p.predicted_at).getTime()) / (1000 * 60 * 60 * 24))
-    if (!p.evaluation_5d && daysElapsed >= 5) stats.ready5d++
-    if (!p.evaluation_10d && daysElapsed >= 10) stats.ready10d++
-    if (!p.evaluation_20d && daysElapsed >= 20) stats.ready20d++
+    if (isCheckpointReady(p.predicted_at, '5d', !!p.evaluation_5d)) stats.ready5d++
+    if (isCheckpointReady(p.predicted_at, '10d', !!p.evaluation_10d)) stats.ready10d++
+    if (isCheckpointReady(p.predicted_at, '20d', !!p.evaluation_20d)) stats.ready20d++
   })
 
   // Get agent performance

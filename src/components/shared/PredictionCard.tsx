@@ -13,21 +13,17 @@ import { LivePriceDisplay } from './LivePriceDisplay'
 import { CheckpointEvaluationResult } from './CheckpointEvaluationResult'
 import type { Prediction, Stock, CheckpointEvaluation } from '@/types/database'
 import type { StockPrice } from '@/hooks/useStockPrices'
+import { 
+  getDaysElapsedDisplay, 
+  isCheckpointReady,
+  type CheckpointType 
+} from '@/utils/checkpointCalculations'
 
 type Props = {
   prediction: Prediction & { stock?: Stock }
   showTicker?: boolean
   price?: StockPrice
   onEvaluated?: () => void
-}
-
-type CheckpointType = '5d' | '10d' | '20d'
-
-function calculateDaysElapsed(predictedAt: string): number {
-  const prediction = new Date(predictedAt)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - prediction.getTime()) / (1000 * 60 * 60 * 24))
-  return Math.max(0, diff)
 }
 
 function getDayProgressDisplay(daysElapsed: number): { label: string; checkpoint: number; remaining: number } {
@@ -47,15 +43,16 @@ function buildCheckpointDataList(prediction: Prediction, daysElapsed: number) {
   return checkpointTypes.map(type => ({
     type,
     evaluation: prediction[`evaluation_${type}` as keyof Prediction] as CheckpointEvaluation | null,
-    daysElapsed
+    daysElapsed,
+    predictedAt: prediction.predicted_at
   }))
 }
 
 function getReadyCheckpoints(
-  checkpoints: { type: CheckpointType; evaluation: CheckpointEvaluation | null; daysElapsed: number }[]
+  checkpoints: { type: CheckpointType; evaluation: CheckpointEvaluation | null; predictedAt: string }[]
 ) {
-  const thresholds: Record<CheckpointType, number> = { '5d': 5, '10d': 10, '20d': 20 }
-  return checkpoints.filter(c => !c.evaluation && c.daysElapsed >= thresholds[c.type])
+  // Use shared utility for consistent "ready" determination
+  return checkpoints.filter(c => isCheckpointReady(c.predictedAt, c.type, !!c.evaluation))
 }
 
 export function PredictionCard({ prediction, showTicker = true, price, onEvaluated }: Props) {
@@ -63,7 +60,7 @@ export function PredictionCard({ prediction, showTicker = true, price, onEvaluat
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null)
 
-  const daysElapsed = useMemo(() => calculateDaysElapsed(prediction.predicted_at), [prediction.predicted_at])
+  const daysElapsed = useMemo(() => getDaysElapsedDisplay(prediction.predicted_at), [prediction.predicted_at])
   const dayProgress = useMemo(() => getDayProgressDisplay(daysElapsed), [daysElapsed])
   const checkpointDataList = useMemo(() => buildCheckpointDataList(prediction, daysElapsed), [prediction, daysElapsed])
   const readyCheckpoints = useMemo(() => getReadyCheckpoints(checkpointDataList), [checkpointDataList])

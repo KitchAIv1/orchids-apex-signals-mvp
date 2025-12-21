@@ -8,6 +8,7 @@ import { AccuracyMetrics } from './AccuracyMetrics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { PlayCircle, Loader2, CheckCircle2 } from 'lucide-react'
+import { isCheckpointReady } from '@/utils/checkpointCalculations'
 import type { CheckpointEvaluation } from '@/types/database'
 
 type Props = {
@@ -26,14 +27,11 @@ function calculateCheckpointSummary(
 ): CheckpointSummary {
   let ready5d = 0, ready10d = 0, ready20d = 0
 
+  // Use shared utility for consistent "ready" determination
   predictions.forEach(p => {
-    const predictedAt = new Date(p.predicted_at)
-    const now = new Date()
-    const daysElapsed = Math.floor((now.getTime() - predictedAt.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (!p.evaluation_5d && daysElapsed >= 5) ready5d++
-    if (!p.evaluation_10d && daysElapsed >= 10) ready10d++
-    if (!p.evaluation_20d && daysElapsed >= 20) ready20d++
+    if (isCheckpointReady(p.predicted_at, '5d', !!p.evaluation_5d)) ready5d++
+    if (isCheckpointReady(p.predicted_at, '10d', !!p.evaluation_10d)) ready10d++
+    if (isCheckpointReady(p.predicted_at, '20d', !!p.evaluation_20d)) ready20d++
   })
 
   return { ready5d, ready10d, ready20d, totalReady: ready5d + ready10d + ready20d }

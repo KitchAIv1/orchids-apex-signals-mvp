@@ -1,11 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Prediction, Stock, CheckpointEvaluation } from '@/types/database'
+import { 
+  getDaysElapsedDisplay, 
+  getDaysRemaining, 
+  getCheckpointStatus,
+  type CheckpointType as SharedCheckpointType
+} from '@/utils/checkpointCalculations'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabaseUntyped = createClient(supabaseUrl, supabaseAnonKey)
 
-export type CheckpointType = '5d' | '10d' | '20d'
+export type CheckpointType = SharedCheckpointType
 
 export type CheckpointConfig = {
   type: CheckpointType
@@ -46,12 +52,6 @@ export type EvaluationResult = {
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY?.split('=').pop() || ''
 
-function calculateDaysElapsed(predictedAt: string): number {
-  const prediction = new Date(predictedAt)
-  const now = new Date()
-  return Math.floor((now.getTime() - prediction.getTime()) / (1000 * 60 * 60 * 24))
-}
-
 function getCheckpointField(checkpoint: CheckpointType): string {
   return `evaluation_${checkpoint}`
 }
@@ -74,32 +74,28 @@ function calculateDirectionalAccuracy(
 
 export class EvaluationService {
   static getCheckpointStatuses(prediction: Prediction): CheckpointStatus[] {
-    const daysElapsed = calculateDaysElapsed(prediction.predicted_at)
+    const daysElapsed = getDaysElapsedDisplay(prediction.predicted_at)
 
     return CHECKPOINT_CONFIGS.map(config => {
       const existingEval = prediction[
         `evaluation_${config.type}` as keyof Prediction
       ] as CheckpointEvaluation | null
 
-      if (existingEval) {
-        return {
-          type: config.type,
-          status: 'evaluated' as const,
-          daysRemaining: 0,
-          daysElapsed,
-          evaluation: existingEval
-        }
-      }
-
-      const daysRemaining = config.tradingDays - daysElapsed
-      const status = daysRemaining <= 0 ? 'ready' : 'pending'
+      // Use shared utility for consistent status determination
+      const status = getCheckpointStatus(
+        prediction.predicted_at,
+        config.type,
+        !!existingEval
+      )
+      
+      const daysRemaining = getDaysRemaining(prediction.predicted_at, config.type)
 
       return {
         type: config.type,
         status,
-        daysRemaining: Math.max(0, daysRemaining),
+        daysRemaining,
         daysElapsed,
-        evaluation: null
+        evaluation: existingEval
       }
     })
   }

@@ -6,6 +6,7 @@ import {
   getStockMarketData, 
   formatDataForAgent, 
   buildHistoryContext,
+  getStockQuote,
   type StockMarketData,
   type RecentHistoryContext 
 } from './MarketDataService'
@@ -238,6 +239,15 @@ export async function persistAnalysis(
 ): Promise<{ predictionId: string; reconciliation: ReturnType<typeof reconcileRecommendation> }> {
   const timestamp = new Date().toISOString()
   
+  // Fetch current price to record at prediction time
+  let priceAtPrediction: number | null = null
+  try {
+    const quote = await getStockQuote(stock.ticker)
+    priceAtPrediction = quote.price
+  } catch (priceErr) {
+    console.warn(`Could not fetch price for ${stock.ticker}:`, priceErr)
+  }
+  
   // Reconcile AI recommendation with calculated
   const reconciliation = reconcileRecommendation(
     synthesis.finalScore,
@@ -302,7 +312,8 @@ export async function persistAnalysis(
       holding_period: synthesis.holdingPeriod,
       debate_summary: synthesis.debateSummary,
       risk_factors: synthesis.riskFactors,
-      predicted_at: timestamp
+      predicted_at: timestamp,
+      price_at_prediction: priceAtPrediction
     })
     .select('id')
     .single()
