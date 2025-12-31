@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { EvaluationService, CHECKPOINT_CONFIGS } from '@/services/EvaluationService'
+import { withStrictRateLimit } from '@/lib/security'
 import type { Prediction, Stock } from '@/types/database'
 import type { CheckpointType, EvaluationResult } from '@/services/EvaluationService'
 
@@ -82,6 +83,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 5 requests/min per IP (modifies database)
+  const rateLimitError = withStrictRateLimit(request, 'evaluate')
+  if (rateLimitError) return rateLimitError
+
   const body = await request.json()
   const { 
     predictionIds, 

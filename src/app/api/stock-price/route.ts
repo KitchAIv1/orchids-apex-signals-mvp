@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withRateLimit, validateTickers } from '@/lib/security'
 
 const FINNHUB_API_KEY = (() => {
   const raw = process.env.FINNHUB_API_KEY || ''
@@ -19,6 +20,10 @@ type FinnhubQuote = {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 60 requests/min per IP
+  const rateLimitError = withRateLimit(request, 'stock-price')
+  if (rateLimitError) return rateLimitError
+
   const searchParams = request.nextUrl.searchParams
   const symbols = searchParams.get('symbols')
 
@@ -26,7 +31,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing symbols parameter' }, { status: 400 })
   }
 
-  const symbolList = symbols.split(',').map(s => s.trim().toUpperCase())
+  // Validate and sanitize ticker symbols
+  const symbolList = validateTickers(symbols)
+  if (!symbolList) {
+    return NextResponse.json({ error: 'Invalid symbols (max 20 allowed)' }, { status: 400 })
+  }
 
   try {
     const quotes = await Promise.all(

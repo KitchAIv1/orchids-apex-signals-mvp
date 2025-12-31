@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withStrictRateLimit } from '@/lib/security'
 import { analyzeStock } from '@/services/AIAgentService'
 import { 
   evaluateCatalystTrigger, 
@@ -23,10 +24,14 @@ interface ProcessingResult {
 }
 
 /**
- * Manual catalyst scan endpoint - no auth required
- * This allows frontend to trigger scans without CRON_SECRET
+ * Manual catalyst scan endpoint
+ * Rate limited to prevent abuse (5 requests/min per IP)
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Rate limit: max 5 scans per minute per IP (expensive AI operation)
+  const rateLimitError = withStrictRateLimit(request, 'catalyst-scan')
+  if (rateLimitError) return rateLimitError
+
   try {
     console.log('🔍 Starting manual catalyst scan...')
     const detectionResult = await detectAllCatalysts()

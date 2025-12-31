@@ -1,15 +1,22 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { analyzeStock } from '@/services/AIAgentService'
+import { withStrictRateLimit, sanitizeTicker } from '@/lib/security'
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ ticker: string }> }
 ) {
-  try {
-    const { ticker } = await params
+  // Rate limit: 5 requests/min per IP (expensive AI operation)
+  const rateLimitError = withStrictRateLimit(request, 'analyze')
+  if (rateLimitError) return rateLimitError
 
+  try {
+    const { ticker: rawTicker } = await params
+
+    // Sanitize ticker input
+    const ticker = sanitizeTicker(rawTicker)
     if (!ticker) {
-      return NextResponse.json({ error: 'Ticker is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Valid ticker is required' }, { status: 400 })
     }
 
     console.log(`Starting analysis for ${ticker}`)

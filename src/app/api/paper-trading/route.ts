@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PaperTradingService } from '@/services/PaperTradingService'
+import { withRateLimit, sanitizeTicker } from '@/lib/security'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limit: 60 requests/min per IP
+  const rateLimitError = withRateLimit(request, 'paper-trading-get')
+  if (rateLimitError) return rateLimitError
+
   try {
     const [portfolio, positions, history] = await Promise.all([
       PaperTradingService.getPortfolioWithValue(),
@@ -17,16 +22,22 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 30 requests/min per IP for trades
+  const rateLimitError = withRateLimit(request, 'paper-trading-post', { maxRequests: 30, windowMs: 60000 })
+  if (rateLimitError) return rateLimitError
+
   try {
     const body = await request.json()
-    const { action, ticker, shares, tradeId, predictionId, aiConfidence, aiDirection, notes } = body
+    const { action, ticker: rawTicker, shares, tradeId, predictionId, aiConfidence, aiDirection, notes } = body
 
     if (action === 'buy') {
-      if (!ticker || !shares || shares <= 0) {
-        return NextResponse.json({ error: 'Invalid ticker or shares' }, { status: 400 })
+      // Sanitize ticker input
+      const ticker = sanitizeTicker(rawTicker)
+      if (!ticker || !shares || shares <= 0 || shares > 10000) {
+        return NextResponse.json({ error: 'Invalid ticker or shares (max 10,000)' }, { status: 400 })
       }
       const trade = await PaperTradingService.executeBuy({
-        ticker: ticker.toUpperCase(),
+        ticker,
         shares,
         predictionId,
         aiConfidence,

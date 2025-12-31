@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withRateLimit, sanitizeTicker } from '@/lib/security'
 
 export type OHLCData = {
   time: string | number  // string for daily, number (unix timestamp) for intraday
@@ -21,12 +22,18 @@ const TIMEFRAME_CONFIG: Record<string, TimeframeConfig> = {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 60 requests/min per IP
+  const rateLimitError = withRateLimit(request, 'chart-data')
+  if (rateLimitError) return rateLimitError
+
   const { searchParams } = new URL(request.url)
-  const ticker = searchParams.get('ticker')
+  const rawTicker = searchParams.get('ticker')
   const timeframe = searchParams.get('timeframe') || '3M'
 
+  // Sanitize ticker input
+  const ticker = sanitizeTicker(rawTicker)
   if (!ticker) {
-    return NextResponse.json({ error: 'Ticker required' }, { status: 400 })
+    return NextResponse.json({ error: 'Valid ticker required' }, { status: 400 })
   }
 
   const config = TIMEFRAME_CONFIG[timeframe] || TIMEFRAME_CONFIG['3M']
