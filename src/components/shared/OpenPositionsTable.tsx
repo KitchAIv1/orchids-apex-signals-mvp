@@ -75,10 +75,12 @@ export function OpenPositionsTable({
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400">
                   <th className="pb-3 text-left font-medium pl-4">Ticker</th>
-                  <th className="pb-3 text-center font-medium">APEX Signal</th>
-                  <th className="pb-3 text-right font-medium">Shares</th>
-                  <th className="pb-3 text-right font-medium">Entry</th>
-                  <th className="pb-3 text-right font-medium">Current</th>
+                  <th className="pb-3 text-center font-medium">Signal</th>
+                  <th className="pb-3 text-right font-medium">Qty</th>
+                  <th className="pb-3 text-right font-medium">Avg Cost</th>
+                  <th className="pb-3 text-right font-medium">Cost Basis</th>
+                  <th className="pb-3 text-right font-medium">Price</th>
+                  <th className="pb-3 text-right font-medium">Mkt Value</th>
                   <th className="pb-3 text-right font-medium">P&L</th>
                   <th className="pb-3 text-right font-medium pr-4"></th>
                 </tr>
@@ -86,7 +88,11 @@ export function OpenPositionsTable({
               <tbody>
                 {positions.map(p => {
                   const isSignalChange = p.apex_signal.signalChanged
-                  const isSellSignal = p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
+                  // Derive recommendation from score for consistency
+                  const scoreBasedRec = p.apex_signal.currentScore === null ? 'HOLD'
+                    : p.apex_signal.currentScore > 30 ? 'BUY'
+                    : p.apex_signal.currentScore < -30 ? 'SELL' : 'HOLD'
+                  const isSellSignal = scoreBasedRec === 'SELL' && p.apex_signal.entrySignal === 'BUY'
                   
                   return (
                     <tr key={p.id} className={cn(
@@ -102,7 +108,11 @@ export function OpenPositionsTable({
                       </td>
                       <td className="py-3 text-right text-zinc-300">{p.shares}</td>
                       <td className="py-3 text-right text-zinc-400">${p.entry_price.toFixed(2)}</td>
-                      <td className="py-3 text-right text-zinc-300 font-medium">${p.current_price.toFixed(2)}</td>
+                      <td className="py-3 text-right text-zinc-400">{formatCurrency(p.total_cost)}</td>
+                      <td className="py-3 text-right text-zinc-300">${p.current_price.toFixed(2)}</td>
+                      <td className="py-3 text-right text-zinc-100 font-medium">
+                        {formatCurrency(p.current_price * p.shares)}
+                      </td>
                       <td className={cn('py-3 text-right font-bold', p.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                         {formatCurrency(p.unrealized_pnl)}
                         <span className="block text-xs opacity-80 font-normal">{formatPct(p.unrealized_pnl_pct)}</span>
@@ -137,11 +147,13 @@ export function OpenPositionsTable({
                   <td className="py-4 font-bold text-zinc-100 pl-4">TOTAL</td>
                   <td className="py-4"></td>
                   <td className="py-4 text-right text-zinc-300">—</td>
-                  <td className="py-4 text-right text-zinc-400">{formatCurrency(positionsSummary.totalCost)}</td>
+                  <td className="py-4 text-right text-zinc-400">—</td>
+                  <td className="py-4 text-right text-zinc-400 font-medium">{formatCurrency(positionsSummary.totalCost)}</td>
                   <td className="py-4 text-right text-zinc-300">—</td>
-                  <td className={cn('py-4 text-right font-bold text-lg', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                  <td className="py-4 text-right text-zinc-100 font-bold">{formatCurrency(positionsSummary.totalValue)}</td>
+                  <td className={cn('py-4 text-right font-bold', positionsSummary.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                     {formatCurrency(positionsSummary.totalPnl)}
-                    <span className="text-sm font-medium ml-1">({formatPct(positionsSummary.totalPnlPct)})</span>
+                    <span className="block text-xs font-medium">({formatPct(positionsSummary.totalPnlPct)})</span>
                   </td>
                   <td></td>
                 </tr>

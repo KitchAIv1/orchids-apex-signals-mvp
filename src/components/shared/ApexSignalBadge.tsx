@@ -8,10 +8,18 @@ type Props = {
   signal: ApexSignal
 }
 
+// Derive recommendation from score (unified logic with Analytics)
+function getRecommendationFromScore(score: number | null): 'BUY' | 'HOLD' | 'SELL' {
+  if (score === null) return 'HOLD'
+  if (score > 30) return 'BUY'
+  if (score < -30) return 'SELL'
+  return 'HOLD'
+}
+
 export function ApexSignalBadge({ signal }: Props) {
   const { currentRecommendation, currentScore, signalChanged, entrySignal } = signal
 
-  if (!currentRecommendation) {
+  if (!currentRecommendation && currentScore === null) {
     return (
       <div className="flex items-center justify-center gap-1.5 opacity-50" title="Not tracked by APEX">
         <User className="h-4 w-4 text-zinc-600" />
@@ -20,19 +28,23 @@ export function ApexSignalBadge({ signal }: Props) {
     )
   }
 
+  // Use score-based recommendation for consistency with Analytics
+  const displayRecommendation = getRecommendationFromScore(currentScore)
+
   const recColor = {
     BUY: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     HOLD: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     SELL: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-  }[currentRecommendation]
+  }[displayRecommendation]
 
-  const scoreColor = (currentScore || 0) >= 65 ? 'bg-emerald-500' 
-    : (currentScore || 0) <= 35 ? 'bg-rose-500' 
+  // Score thresholds: Bullish > +30, Bearish < -30, Neutral otherwise (-100 to +100 scale)
+  const scoreColor = (currentScore || 0) > 30 ? 'bg-emerald-500' 
+    : (currentScore || 0) < -30 ? 'bg-rose-500' 
     : 'bg-amber-500'
 
   const isMajorChange = signalChanged && (
-    (entrySignal === 'BUY' && currentRecommendation === 'SELL') ||
-    (entrySignal === 'SELL' && currentRecommendation === 'BUY')
+    (entrySignal === 'BUY' && displayRecommendation === 'SELL') ||
+    (entrySignal === 'SELL' && displayRecommendation === 'BUY')
   )
 
   return (
@@ -43,7 +55,7 @@ export function ApexSignalBadge({ signal }: Props) {
         recColor
       )}>
         <span className="text-xs font-bold tracking-wide">
-          {currentRecommendation}
+          {displayRecommendation}
         </span>
         
         {/* Score Dot */}
@@ -63,7 +75,7 @@ export function ApexSignalBadge({ signal }: Props) {
               'flex items-center gap-1 text-[10px] font-medium px-1.5 rounded-sm',
               isMajorChange ? 'text-rose-400 bg-rose-500/10' : 'text-amber-400 bg-amber-500/10'
             )}
-            title={`Signal changed from ${entrySignal} to ${currentRecommendation}`}
+            title={`Signal changed from ${entrySignal} to ${displayRecommendation}`}
           >
             {isMajorChange ? <AlertTriangle className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
             <span>Flip</span>

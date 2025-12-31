@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { TrendingUp, BarChart3, History, Wallet } from 'lucide-react'
+import { TrendingUp, History, Wallet, LineChart } from 'lucide-react'
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: BarChart3 },
+  { href: '/analytics', label: 'Analytics', icon: LineChart },
   { href: '/predictions', label: 'Predictions', icon: History },
   { href: '/paper-trading', label: 'Paper Trading', icon: Wallet },
 ]

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Bell, X, ChevronRight, Zap } from 'lucide-react'
+import { AlertTriangle, Bell, X, ChevronRight, Zap, Radar, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -40,14 +40,43 @@ function getEventLabel(eventType: string): string {
   return labels[eventType] || eventType.replace(/_/g, ' ')
 }
 
+type ScanResult = {
+  message: string
+  detection?: {
+    stocksScanned: number
+    catalystsDetected: number
+    catalystsInserted: number
+  }
+}
+
 export function CatalystAlertBanner({ className }: Props) {
   const [alerts, setAlerts] = useState<CatalystAlert[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null)
 
   useEffect(() => {
     fetchRecentAlerts()
   }, [])
+
+  async function handleScan() {
+    setScanning(true)
+    setScanResult(null)
+    try {
+      const response = await fetch('/api/catalyst-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const result = await response.json()
+      setScanResult(result)
+      setTimeout(() => fetchRecentAlerts(), 1000)
+    } catch (error) {
+      setScanResult({ message: `Scan failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
+    } finally {
+      setScanning(false)
+    }
+  }
 
   async function fetchRecentAlerts() {
     try {
@@ -95,10 +124,6 @@ export function CatalystAlertBanner({ className }: Props) {
   }
 
   const visibleAlerts = alerts.filter(a => !dismissed.has(a.id))
-  
-  if (loading || visibleAlerts.length === 0) {
-    return null
-  }
 
   const criticalCount = visibleAlerts.filter(a => a.urgency === 'CRITICAL').length
   const highCount = visibleAlerts.filter(a => a.urgency === 'HIGH').length
@@ -141,18 +166,68 @@ export function CatalystAlertBanner({ className }: Props) {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setDismissed(new Set(alerts.map(a => a.id)))}
-          className="text-zinc-500 hover:text-zinc-300 p-1"
-          title="Dismiss all"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              scanning
+                ? 'bg-amber-500/20 text-amber-300 cursor-wait'
+                : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30'
+            )}
+            title="Scan all stocks for new catalysts"
+          >
+            <Radar className={cn('h-3.5 w-3.5', scanning && 'animate-pulse')} />
+            {scanning ? 'Scanning...' : 'Scan Now'}
+          </button>
+          <button
+            onClick={() => fetchRecentAlerts()}
+            className="p-1.5 rounded hover:bg-zinc-800/50 transition-colors"
+            title="Refresh list"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5 text-zinc-500', loading && 'animate-spin')} />
+          </button>
+          <button
+            onClick={() => setDismissed(new Set(alerts.map(a => a.id)))}
+            className="text-zinc-500 hover:text-zinc-300 p-1"
+            title="Dismiss all"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Scan Result Banner */}
+      {scanResult && (
+        <div className={cn(
+          'px-4 py-2 text-xs border-b border-zinc-800/50',
+          scanResult.detection ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
+        )}>
+          {scanResult.message}
+          {scanResult.detection && (
+            <span className="ml-2 text-zinc-400">
+              Stocks: {scanResult.detection.stocksScanned}, 
+              Detected: {scanResult.detection.catalystsDetected}, 
+              New: {scanResult.detection.catalystsInserted}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Alert Items */}
       <div className="divide-y divide-zinc-800/50 max-h-[300px] overflow-y-auto">
-        {visibleAlerts.slice(0, 5).map(alert => (
+        {loading && (
+          <div className="px-4 py-6 text-center text-zinc-500 text-sm">
+            Loading catalysts...
+          </div>
+        )}
+        {!loading && visibleAlerts.length === 0 && (
+          <div className="px-4 py-6 text-center text-zinc-500 text-sm">
+            No catalyst alerts. Click &quot;Scan Now&quot; to check for new catalysts.
+          </div>
+        )}
+        {visibleAlerts.slice(0, 10).map(alert => (
           <Link key={alert.id} href={`/stock/${alert.ticker}`}>
             <div className={cn(
               'flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer',
@@ -198,11 +273,9 @@ export function CatalystAlertBanner({ className }: Props) {
         ))}
       </div>
 
-      {visibleAlerts.length > 5 && (
-        <div className="px-4 py-2 text-center border-t border-zinc-800/50">
-          <Link href="/" className="text-xs text-amber-400 hover:text-amber-300">
-            View all {visibleAlerts.length} alerts on Dashboard →
-          </Link>
+      {visibleAlerts.length > 10 && (
+        <div className="px-4 py-2 text-center border-t border-zinc-800/50 text-xs text-zinc-500">
+          Showing 10 of {visibleAlerts.length} alerts
         </div>
       )}
     </div>

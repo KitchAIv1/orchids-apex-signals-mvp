@@ -21,10 +21,11 @@ function buildExplainerText(
 ): string {
   if (agentScores.length === 0) return 'Awaiting agent analysis...'
 
-  const bullish = agentScores.filter(a => a.score >= 50)
-  const bearish = agentScores.filter(a => a.score < 50)
+  // Agent scores: -100 to +100 scale
+  const bullish = agentScores.filter(a => a.score > 0)
+  const bearish = agentScores.filter(a => a.score < 0)
   const extremeBearish = agentScores.find(a => a.score <= -50)
-  const extremeBullish = agentScores.find(a => a.score >= 80)
+  const extremeBullish = agentScores.find(a => a.score >= 50)
 
   if (hasDeviation && extremeBearish) {
     const agentInfo = AgentService.getAgentInfo(extremeBearish.agent_name)

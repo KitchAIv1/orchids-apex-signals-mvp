@@ -25,8 +25,9 @@ export function DebateSummary({ agents, debateSummary, storedRecommendation }: P
   const hasDeviation = reconciliation?.hasDeviation ?? false
   const recommendation = storedRecommendation ?? calculatedRecommendation
   
-  const bullishCount = agents.filter(a => a.score >= 70).length
-  const bearishCount = agents.filter(a => a.score < 40).length
+  // Agent scores are on -100 to +100 scale: > +30 = bullish, < -30 = bearish
+  const bullishCount = agents.filter(a => a.score > 30).length
+  const bearishCount = agents.filter(a => a.score < -30).length
   const neutralCount = agents.length - bullishCount - bearishCount
   
   return (
@@ -50,11 +51,11 @@ export function DebateSummary({ agents, debateSummary, storedRecommendation }: P
           <p className="text-xs text-zinc-500 mb-1">Final Score</p>
           <p className={cn(
             'text-lg font-bold tabular-nums',
-            weightedScore >= 70 && 'text-emerald-400',
-            weightedScore >= 40 && weightedScore < 70 && 'text-amber-400',
-            weightedScore < 40 && 'text-rose-400'
+            weightedScore > 30 && 'text-emerald-400',
+            weightedScore >= -30 && weightedScore <= 30 && 'text-amber-400',
+            weightedScore < -30 && 'text-rose-400'
           )}>
-            {weightedScore}
+            {weightedScore > 0 ? '+' : ''}{weightedScore}
           </p>
         </div>
         <div className="text-center">

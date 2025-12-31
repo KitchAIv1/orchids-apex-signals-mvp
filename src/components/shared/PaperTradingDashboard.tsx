@@ -38,8 +38,15 @@ export function PaperTradingDashboard() {
   }, [positions])
 
   const signalAlerts = useMemo(() => {
+    // Derive recommendation from score for consistency
+    const getRecFromScore = (score: number | null) => {
+      if (score === null) return 'HOLD'
+      if (score > 30) return 'BUY'
+      if (score < -30) return 'SELL'
+      return 'HOLD'
+    }
     const exitSignals = positions.filter(p => 
-      p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
+      getRecFromScore(p.apex_signal.currentScore) === 'SELL' && p.apex_signal.entrySignal === 'BUY'
     )
     const signalChanges = positions.filter(p => p.apex_signal.signalChanged)
     return { exitSignals, signalChanges }

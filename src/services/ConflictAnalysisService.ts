@@ -8,7 +8,8 @@ export type ConflictCase = {
 }
 
 export function getKeyPointFromScore(agentName: string, score: number): string {
-  const stance = score >= 50 ? 'positive' : 'negative'
+  // Agent scores: -100 to +100, positive = bullish, negative = bearish
+  const stance = score >= 0 ? 'positive' : 'negative'
   
   const keyPoints: Record<string, Record<string, string>> = {
     fundamental: {
@@ -51,8 +52,9 @@ export function buildExplainer(
     return 'Awaiting agent analysis...'
   }
   
+  // Dominant signals: strong conviction beyond +/- 50 on -100 to +100 scale
   const dominantBearish = bearishAgents.find(a => a.score <= -50)
-  const dominantBullish = bullishAgents.find(a => a.score >= 80)
+  const dominantBullish = bullishAgents.find(a => a.score >= 50)
   
   if (hasDeviation) {
     if (dominantBearish) {

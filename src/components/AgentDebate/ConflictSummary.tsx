@@ -19,8 +19,9 @@ export function ConflictSummary({
   hasDeviation,
   calculatedRecommendation 
 }: Props) {
+  // Agent scores are on -100 to +100 scale: positive = bullish, negative = bearish
   const bullishAgents: ConflictCase[] = agents
-    .filter(a => a.score >= 50)
+    .filter(a => a.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map(a => ({
@@ -31,7 +32,7 @@ export function ConflictSummary({
     }))
 
   const bearishAgents: ConflictCase[] = agents
-    .filter(a => a.score < 50)
+    .filter(a => a.score < 0)
     .sort((a, b) => a.score - b.score)
     .slice(0, 3)
     .map(a => ({

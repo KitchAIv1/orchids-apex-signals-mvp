@@ -20,7 +20,11 @@ export function PositionCardMobile({
   formatCurrency,
   formatPct
 }: Props) {
-  const isSellSignal = p.apex_signal.currentRecommendation === 'SELL' && p.apex_signal.entrySignal === 'BUY'
+  // Derive recommendation from score for consistency
+  const scoreBasedRec = p.apex_signal.currentScore === null ? 'HOLD'
+    : p.apex_signal.currentScore > 30 ? 'BUY'
+    : p.apex_signal.currentScore < -30 ? 'SELL' : 'HOLD'
+  const isSellSignal = scoreBasedRec === 'SELL' && p.apex_signal.entrySignal === 'BUY'
 
   return (
     <div className={cn(
@@ -43,14 +47,16 @@ export function PositionCardMobile({
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-4 text-xs">
+      <div className="grid grid-cols-2 gap-3 mb-4 text-xs">
         <div>
-          <span className="block text-zinc-500 mb-0.5">Avg Entry</span>
-          <span className="block font-medium text-zinc-300">${p.entry_price.toFixed(2)}</span>
+          <span className="block text-zinc-500 mb-0.5">Cost Basis</span>
+          <span className="block font-medium text-zinc-300">{formatCurrency(p.total_cost)}</span>
+          <span className="block text-[10px] text-zinc-500">{p.shares} × ${p.entry_price.toFixed(2)}</span>
         </div>
         <div>
-          <span className="block text-zinc-500 mb-0.5">Current Price</span>
-          <span className="block font-medium text-zinc-300">${p.current_price.toFixed(2)}</span>
+          <span className="block text-zinc-500 mb-0.5">Market Value</span>
+          <span className="block font-medium text-zinc-100">{formatCurrency(p.current_price * p.shares)}</span>
+          <span className="block text-[10px] text-zinc-500">{p.shares} × ${p.current_price.toFixed(2)}</span>
         </div>
       </div>
 

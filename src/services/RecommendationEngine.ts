@@ -11,28 +11,31 @@ export type ScoreLabel = 'BULLISH' | 'NEUTRAL' | 'BEARISH'
 
 /**
  * OFFICIAL RECOMMENDATION THRESHOLDS
+ * Scale: -100 to +100 (agent consensus score)
  * All components MUST use these values
  */
 export const THRESHOLDS = {
-  BUY_MIN: 65,      // Score > 65 = BUY
-  SELL_MAX: 35,     // Score < 35 = SELL
-  // HOLD = 35-65 (inclusive)
+  BUY_MIN: 30,      // Score > +30 = BUY (Bullish)
+  SELL_MAX: -30,    // Score < -30 = SELL (Bearish)
+  // HOLD = -30 to +30 (Neutral)
 } as const
 
 /**
  * SCORE COLOR THRESHOLDS (for UI consistency)
+ * Aligned with -100 to +100 scale
  */
 export const SCORE_COLORS = {
-  BULLISH_MIN: 65,  // Green
-  BEARISH_MAX: 35,  // Red
-  // 35-65 = Amber/Neutral
+  BULLISH_MIN: 30,   // Green (score > +30)
+  BEARISH_MAX: -30,  // Red (score < -30)
+  // -30 to +30 = Amber/Neutral
 } as const
 
 /**
  * CATALYST TRIGGER BOUNDARIES
  * Used by 5-gate system to detect boundary proximity
+ * Updated for -100 to +100 scale
  */
-export const CATALYST_BOUNDARIES = [35, 65] as const
+export const CATALYST_BOUNDARIES = [-30, 30] as const
 
 /**
  * Calculate recommendation from score using official thresholds
@@ -45,27 +48,30 @@ export function calculateRecommendation(score: number): Recommendation {
 
 /**
  * Get score label (BULLISH/NEUTRAL/BEARISH)
+ * Scale: -100 to +100
  */
 export function getScoreLabel(score: number): ScoreLabel {
-  if (score >= SCORE_COLORS.BULLISH_MIN) return 'BULLISH'
+  if (score > SCORE_COLORS.BULLISH_MIN) return 'BULLISH'
   if (score < SCORE_COLORS.BEARISH_MAX) return 'BEARISH'
   return 'NEUTRAL'
 }
 
 /**
  * Get score color class for UI
+ * Scale: -100 to +100
  */
 export function getScoreColorClass(score: number): string {
-  if (score >= SCORE_COLORS.BULLISH_MIN) return 'text-emerald-500'
+  if (score > SCORE_COLORS.BULLISH_MIN) return 'text-emerald-500'
   if (score < SCORE_COLORS.BEARISH_MAX) return 'text-rose-500'
   return 'text-amber-500'
 }
 
 /**
  * Get score background color class for UI
+ * Scale: -100 to +100
  */
 export function getScoreBgColorClass(score: number): string {
-  if (score >= SCORE_COLORS.BULLISH_MIN) return 'bg-emerald-500/10 border-emerald-500/30'
+  if (score > SCORE_COLORS.BULLISH_MIN) return 'bg-emerald-500/10 border-emerald-500/30'
   if (score < SCORE_COLORS.BEARISH_MAX) return 'bg-rose-500/10 border-rose-500/30'
   return 'bg-amber-500/10 border-amber-500/30'
 }

@@ -195,10 +195,10 @@ Key Metrics: ${result.key_metric_1}, ${result.key_metric_2}, ${result.key_metric
 Weigh each agent's opinion according to their weight. Resolve conflicts logically.
 Be decisive but acknowledge uncertainty where appropriate.
 
-IMPORTANT - Recommendation Thresholds:
-- Score > ${THRESHOLDS.BUY_MIN} = BUY
-- Score ${THRESHOLDS.SELL_MAX}-${THRESHOLDS.BUY_MIN} = HOLD
-- Score < ${THRESHOLDS.SELL_MAX} = SELL
+IMPORTANT - Recommendation Thresholds (scale: -100 to +100):
+- Score > +${THRESHOLDS.BUY_MIN} = BUY (Bullish)
+- Score ${THRESHOLDS.SELL_MAX} to +${THRESHOLDS.BUY_MIN} = HOLD (Neutral)
+- Score < ${THRESHOLDS.SELL_MAX} = SELL (Bearish)
 
 Your recommendation should generally align with these thresholds based on the final score.
 However, you may deviate if there's a compelling qualitative reason (e.g., imminent catalyst).

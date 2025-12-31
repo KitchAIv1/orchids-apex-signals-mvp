@@ -167,9 +167,10 @@ export function StockCard({ stock, price, hasRecentCatalyst, catalystUrgency }: 
                   key={agent.id || i}
                   className="h-1 flex-1 rounded-full transition-all duration-300"
                   style={{
-                    backgroundColor: agent.score >= 70 
+                    // Agent scores: -100 to +100 scale
+                    backgroundColor: agent.score > 30 
                       ? 'rgb(16 185 129 / 0.5)' 
-                      : agent.score >= 40 
+                      : agent.score >= -30 
                       ? 'rgb(245 158 11 / 0.5)' 
                       : 'rgb(244 63 94 / 0.5)'
                   }}

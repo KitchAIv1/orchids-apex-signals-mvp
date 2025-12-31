@@ -111,7 +111,8 @@ export function CatalystFeed() {
     setScanResult(null)
     
     try {
-      const response = await fetch('/api/cron/catalyst-monitor', {
+      // Use manual scan endpoint (no CRON auth required)
+      const response = await fetch('/api/catalyst-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })
