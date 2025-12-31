@@ -32,11 +32,11 @@ export function AgentCard({ agent, info, isSelected, onSelect }: Props) {
       <div className="mt-1 flex flex-col items-center">
         <span className={cn(
           'text-2xl font-bold tabular-nums',
-          agent.score >= 70 && 'text-emerald-400',
-          agent.score >= 40 && agent.score < 70 && 'text-amber-400',
-          agent.score < 40 && 'text-rose-400'
+          agent.score > 30 && 'text-emerald-400',
+          agent.score >= -30 && agent.score <= 30 && 'text-amber-400',
+          agent.score < -30 && 'text-rose-400'
         )}>
-          {agent.score}
+          {agent.score > 0 ? '+' : ''}{agent.score}
         </span>
         <span className={cn(
           'text-xs font-medium uppercase tracking-wide',
@@ -51,11 +51,11 @@ export function AgentCard({ agent, info, isSelected, onSelect }: Props) {
         <div
           className={cn(
             'h-full rounded-full transition-all',
-            agent.score >= 70 && 'bg-emerald-500',
-            agent.score >= 40 && agent.score < 70 && 'bg-amber-500',
-            agent.score < 40 && 'bg-rose-500'
+            agent.score > 30 && 'bg-emerald-500',
+            agent.score >= -30 && agent.score <= 30 && 'bg-amber-500',
+            agent.score < -30 && 'bg-rose-500'
           )}
-          style={{ width: `${agent.score}%` }}
+          style={{ width: `${((agent.score + 100) / 200) * 100}%` }}
         />
       </div>
     </button>

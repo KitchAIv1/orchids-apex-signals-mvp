@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { getScoreColor, getScoreBgColor } from '@/utils/formatters'
+import { getScoreLabel } from '@/services/RecommendationEngine'
 
 type Props = {
   score: number | null | undefined
@@ -13,7 +14,8 @@ export function ScoreBadge({ score, showLabel = false }: Props) {
   const colorClass = getScoreColor(displayScore)
   const bgClass = getScoreBgColor(displayScore)
   
-  const label = displayScore >= 70 ? 'Bullish' : displayScore >= 40 ? 'Neutral' : 'Bearish'
+  // Use centralized threshold logic: > +30 = Bullish, < -30 = Bearish, else Neutral
+  const label = getScoreLabel(displayScore)
   
   return (
     <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-1.5', bgClass)}>

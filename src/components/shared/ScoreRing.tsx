@@ -11,9 +11,12 @@ export function ScoreRing({ score, size = 40 }: Props) {
   const strokeWidth = 3
   const radius = (size - strokeWidth) / 2
   const circumference = radius * 2 * Math.PI
-  const offset = circumference - (score / 100) * circumference
+  // Normalize -100 to +100 scale to 0-100 for the ring visual
+  const normalizedScore = ((score + 100) / 200) * 100
+  const offset = circumference - (normalizedScore / 100) * circumference
   
-  const color = score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-amber-400' : 'text-rose-400'
+  // Use centralized threshold: > +30 = green, < -30 = red, else amber
+  const color = score > 30 ? 'text-emerald-400' : score < -30 ? 'text-rose-400' : 'text-amber-400'
   
   return (
     <div className="relative flex items-center justify-center">
