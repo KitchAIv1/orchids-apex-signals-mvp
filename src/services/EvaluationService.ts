@@ -56,19 +56,46 @@ function getCheckpointField(checkpoint: CheckpointType): string {
   return `evaluation_${checkpoint}`
 }
 
+/**
+ * HOLD ACCURACY THRESHOLD
+ * HOLD is now considered accurate if movement was within this range
+ * This reflects "market perform" rather than expecting flat movement
+ */
+const HOLD_ACCURACY_THRESHOLD = 5.0 // ±5% is considered "HOLD accurate"
+
 function determineDirection(returnPct: number): 'UP' | 'DOWN' | 'FLAT' {
   if (returnPct > 0.5) return 'UP'
   if (returnPct < -0.5) return 'DOWN'
   return 'FLAT'
 }
 
+/**
+ * Calculate directional accuracy with calibrated HOLD logic
+ * 
+ * CALIBRATION v2 (2026-02-03):
+ * - BUY: accurate if stock went UP (any positive movement >0.5%)
+ * - SELL: accurate if stock went DOWN (any negative movement <-0.5%)
+ * - HOLD: accurate if movement was within ±5% (market perform)
+ *   This replaces the old FLAT-only logic which was structurally impossible
+ *   (only 2.86% of stocks stay flat, making HOLD a losing bet)
+ */
 function calculateDirectionalAccuracy(
   recommendation: string,
-  direction: 'UP' | 'DOWN' | 'FLAT'
+  direction: 'UP' | 'DOWN' | 'FLAT',
+  returnPct?: number
 ): boolean {
   if (recommendation === 'BUY' && direction === 'UP') return true
   if (recommendation === 'SELL' && direction === 'DOWN') return true
-  if (recommendation === 'HOLD' && direction === 'FLAT') return true
+  
+  // HOLD accuracy: within ±5% OR flat
+  if (recommendation === 'HOLD') {
+    if (direction === 'FLAT') return true
+    // If we have the actual return, check if within threshold
+    if (returnPct !== undefined) {
+      return Math.abs(returnPct) <= HOLD_ACCURACY_THRESHOLD
+    }
+  }
+  
   return false
 }
 
@@ -196,7 +223,8 @@ export class EvaluationService {
     const direction = determineDirection(returnPct)
     const directionalAccuracy = calculateDirectionalAccuracy(
       prediction.recommendation,
-      direction
+      direction,
+      returnPct  // Pass returnPct for calibrated HOLD accuracy check
     )
 
     const evaluation: CheckpointEvaluation = {

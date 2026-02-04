@@ -13,29 +13,34 @@ export type ScoreLabel = 'BULLISH' | 'NEUTRAL' | 'BEARISH'
  * OFFICIAL RECOMMENDATION THRESHOLDS
  * Scale: -100 to +100 (agent consensus score)
  * All components MUST use these values
+ * 
+ * CALIBRATION v2 (2026-02-03):
+ * - Lowered BUY threshold to capture market's natural upward bias
+ * - Markets go UP ~63% of the time; system should reflect this
+ * - HOLD now represents uncertainty, not flat expectation
  */
 export const THRESHOLDS = {
-  BUY_MIN: 30,      // Score > +30 = BUY (Bullish)
-  SELL_MAX: -30,    // Score < -30 = SELL (Bearish)
-  // HOLD = -30 to +30 (Neutral)
+  BUY_MIN: 0,       // Score > 0 = BUY (Bullish baseline - markets have upward bias)
+  SELL_MAX: -25,    // Score < -25 = SELL (Only on strong bearish conviction)
+  // HOLD = -25 to 0 (Uncertain/Cautious)
 } as const
 
 /**
  * SCORE COLOR THRESHOLDS (for UI consistency)
- * Aligned with -100 to +100 scale
+ * Aligned with new calibrated thresholds
  */
 export const SCORE_COLORS = {
-  BULLISH_MIN: 30,   // Green (score > +30)
-  BEARISH_MAX: -30,  // Red (score < -30)
-  // -30 to +30 = Amber/Neutral
+  BULLISH_MIN: 0,    // Green (score > 0) - aligned with BUY threshold
+  BEARISH_MAX: -25,  // Red (score < -25) - aligned with SELL threshold
+  // -25 to 0 = Amber/Cautious
 } as const
 
 /**
  * CATALYST TRIGGER BOUNDARIES
  * Used by 5-gate system to detect boundary proximity
- * Updated for -100 to +100 scale
+ * Aligned with new calibrated thresholds
  */
-export const CATALYST_BOUNDARIES = [-30, 30] as const
+export const CATALYST_BOUNDARIES = [-25, 0] as const
 
 /**
  * Calculate recommendation from score using official thresholds

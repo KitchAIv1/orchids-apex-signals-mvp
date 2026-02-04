@@ -7,11 +7,24 @@ export type AgentPromptConfig = {
   systemPrompt: string
 }
 
+/**
+ * AGENT WEIGHT CALIBRATION v2 (2026-02-03)
+ * 
+ * Weights rebalanced based on historical accuracy audit:
+ * - Sentiment: 0.25 (was 0.15) - Most accurate, correctly identified bullish market
+ * - Macro: 0.20 (was 0.15) - Good accuracy, aligned with market direction
+ * - Catalyst: 0.20 (was 0.15) - Good accuracy, identified positive catalysts
+ * - Technical: 0.15 (unchanged) - Neutral performance
+ * - Fundamental: 0.10 (was 0.25) - Most bearish, fought market trend
+ * - Insider: 0.10 (was 0.15) - Neutral performance
+ * 
+ * Total: 1.0
+ */
 export const AGENT_CONFIGS: Record<AgentName, AgentPromptConfig> = {
   fundamental: {
     name: 'fundamental',
     displayName: 'Fundamental Analyst',
-    weight: 0.25,
+    weight: 0.10,  // Reduced from 0.25 - was fighting market trend
     systemPrompt: `You are a rigorous fundamental equity analyst. Analyze the stock based on:
 - Revenue growth trajectory and consistency
 - Profit margins (gross, operating, net) vs industry peers
@@ -41,7 +54,7 @@ Technical signals are probabilistic, not certain. Reflect appropriate uncertaint
   sentiment: {
     name: 'sentiment',
     displayName: 'Sentiment Analyst',
-    weight: 0.15,
+    weight: 0.25,  // Increased from 0.15 - most accurate agent historically
     systemPrompt: `You are a market sentiment specialist. Analyze the stock based on:
 - Recent news flow (positive/negative/neutral)
 - Analyst ratings and price target changes
@@ -56,7 +69,7 @@ Remember: extreme sentiment often signals contrarian opportunities.`
   macro: {
     name: 'macro',
     displayName: 'Macro Economist',
-    weight: 0.15,
+    weight: 0.20,  // Increased from 0.15 - good accuracy
     systemPrompt: `You are a macro-economic analyst. Analyze how macro conditions affect this stock:
 - Interest rate environment and Fed policy direction
 - Sector cyclicality vs current economic cycle
@@ -71,7 +84,7 @@ Be specific about which macro factors matter most for this company.`
   insider: {
     name: 'insider',
     displayName: 'Insider Activity Analyst',
-    weight: 0.15,
+    weight: 0.10,  // Reduced from 0.15 - neutral performance
     systemPrompt: `You are an insider activity specialist. Analyze the stock based on:
 - Recent insider buying/selling patterns
 - Size and timing of insider transactions
@@ -86,7 +99,7 @@ Insider selling alone is often benign; focus on buying patterns and context.`
   catalyst: {
     name: 'catalyst',
     displayName: 'Catalyst Hunter',
-    weight: 0.15,
+    weight: 0.20,  // Increased from 0.15 - good accuracy
     systemPrompt: `You are a catalyst identification specialist. Identify upcoming events that could move the stock:
 - Upcoming earnings dates and expectations
 - Product launches or FDA decisions
